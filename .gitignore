@@ -1,0 +1,38 @@
+# --- Gradle ---
+.gradle/
+**/build/
+!**/src/**/build/
+gradle-app.setting
+.gradletasknamecache
+
+# Keep Gradle Wrapper files (recommended for consistent builds across machines)
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# --- Java / JVM ---
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# --- VS Code & Java Language Server ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.settings/
+.classpath
+.project
+bin/
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
