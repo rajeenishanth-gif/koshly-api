@@ -47,7 +47,30 @@ class PreferencesControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dashboard.length()").value(6))
                 .andExpect(jsonPath("$.dashboard[0].section").value("upcoming"))
-                .andExpect(jsonPath("$.dashboard[0].visible").value(true));
+                .andExpect(jsonPath("$.dashboard[0].visible").value(true))
+                .andExpect(jsonPath("$.country").value("US"))
+                .andExpect(jsonPath("$.currency").value("USD"))
+                .andExpect(jsonPath("$.dataRegion").value("us"));
+    }
+
+    @Test
+    void choosingIndiaSwitchesTheCurrencyToRupees() throws Exception {
+        mvc.perform(put(URL).with(user("priya")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"country\": \"IN\", \"timeZone\": \"Asia/Kolkata\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.country").value("IN"))
+                .andExpect(jsonPath("$.currency").value("INR"))
+                .andExpect(jsonPath("$.timeZone").value("Asia/Kolkata"))
+                // the dashboard order wasn't sent, so it's unchanged (the default)
+                .andExpect(jsonPath("$.dashboard[0].section").value("upcoming"));
+    }
+
+    @Test
+    void rejectsUnsupportedCountriesAndTimeZones() throws Exception {
+        for (String body : new String[] {"{\"country\": \"FR\"}", "{\"timeZone\": \"Mars/Olympus\"}"}) {
+            mvc.perform(put(URL).with(user("alice")).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        }
     }
 
     @Test

@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Set;
 
+import com.koshly.region.Market;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
@@ -57,8 +59,15 @@ public record AccountRequest(
         @NotNull(message = "Balance is required.")
         @DecimalMin(value = "0.00", message = "Balance can't be negative.")
         @DecimalMax(value = MAX_MONEY, message = "Balance looks too large.")
-        @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+        @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
         BigDecimal balance,
+
+        /**
+         * Country to add it to, e.g. "US" or "IN". Optional: defaults to the
+         * user's current country. Its currency follows. Can't change later.
+         */
+        @Pattern(regexp = "^[A-Z]{2}$", message = "Country must be a 2-letter code like US or IN.")
+        String country,
 
         /** Only for type "credit". */
         @Valid
@@ -71,28 +80,29 @@ public record AccountRequest(
     // Letters, numbers, spaces and & ' . , ( ) / + -   (same as the app)
     static final String NAME = "^[A-Za-z0-9][A-Za-z0-9 &'.,()/+-]*$";
     static final String NAME_MESSAGE = "Use only letters, numbers, spaces and & ' . , ( ) / + -";
-    static final String MAX_MONEY = "10000000.00";
+    // Up to 99 crore rupees or ~1 billion dollars; the database allows 9,999,999,999.99.
+    static final String MAX_MONEY = "999999999.99";
 
     private static final Set<String> DEPOSITORY_SUBTYPES = Set.of("checking", "savings");
     private static final Set<String> LOAN_SUBTYPES = Set.of("auto", "student", "mortgage", "personal");
 
     public record CreditCardDetails(
             @NotNull(message = "Credit limit is required.")
-            @DecimalMin(value = "0.00", inclusive = false, message = "Credit limit must be more than $0.")
+            @DecimalMin(value = "0.00", inclusive = false, message = "Credit limit must be more than 0.")
             @DecimalMax(value = MAX_MONEY, message = "Credit limit looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal creditLimit,
 
             @NotNull(message = "Statement balance is required.")
             @DecimalMin(value = "0.00", message = "Statement balance can't be negative.")
             @DecimalMax(value = MAX_MONEY, message = "Statement balance looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal statementBalance,
 
             @NotNull(message = "Minimum payment is required.")
             @DecimalMin(value = "0.00", message = "Minimum payment can't be negative.")
             @DecimalMax(value = MAX_MONEY, message = "Minimum payment looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal minimumDue,
 
             @NotNull(message = "Payment due day is required.")
@@ -128,9 +138,9 @@ public record AccountRequest(
             BigDecimal apr,
 
             @NotNull(message = "Promo balance is required.")
-            @DecimalMin(value = "0.00", inclusive = false, message = "Promo balance must be more than $0.")
+            @DecimalMin(value = "0.00", inclusive = false, message = "Promo balance must be more than 0.")
             @DecimalMax(value = MAX_MONEY, message = "Promo balance looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal balance,
 
             @NotNull(message = "Promo end date is required.")
@@ -139,21 +149,21 @@ public record AccountRequest(
             @NotNull(message = "Transfer fee is required (use 0 if none).")
             @DecimalMin(value = "0.00", message = "Transfer fee can't be negative.")
             @DecimalMax(value = MAX_MONEY, message = "Transfer fee looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal fee) {
     }
 
     public record LoanDetails(
             @NotNull(message = "Original loan amount is required.")
-            @DecimalMin(value = "0.00", inclusive = false, message = "Original amount must be more than $0.")
+            @DecimalMin(value = "0.00", inclusive = false, message = "Original amount must be more than 0.")
             @DecimalMax(value = MAX_MONEY, message = "Original amount looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal originalAmount,
 
             @NotNull(message = "Monthly payment is required.")
-            @DecimalMin(value = "0.00", inclusive = false, message = "Monthly payment must be more than $0.")
+            @DecimalMin(value = "0.00", inclusive = false, message = "Monthly payment must be more than 0.")
             @DecimalMax(value = MAX_MONEY, message = "Monthly payment looks too large.")
-            @Digits(integer = 8, fraction = 2, message = "Use at most 2 decimal places.")
+            @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
             BigDecimal monthlyPayment,
 
             @NotNull(message = "Payment day is required.")
@@ -192,6 +202,11 @@ public record AccountRequest(
     @AssertTrue(message = "Loans need loan details; other types must not include them.")
     public boolean isLoanDetailsMatchingType() {
         return type == null || LOAN.equals(type) == (loan != null);
+    }
+
+    @AssertTrue(message = "Koshly isn't available in that country yet.")
+    public boolean isCountrySupported() {
+        return country == null || Market.COUNTRIES.contains(country);
     }
 
     @AssertTrue(message = "Last 4 digits are required.")

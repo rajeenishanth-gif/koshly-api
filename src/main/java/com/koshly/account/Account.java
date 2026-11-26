@@ -1,5 +1,7 @@
 package com.koshly.account;
 
+import com.koshly.region.Market;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -58,6 +60,14 @@ public class Account {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal balance;
 
+    /** Country it belongs to, e.g. "US" or "IN". Set once; the app shows one country at a time. */
+    @Column(nullable = false, length = 2, updatable = false)
+    private String country = "US";
+
+    /** ISO currency code of every amount on this account: always its country's currency. */
+    @Column(nullable = false, length = 3)
+    private String currency = "USD";
+
     /** manual (typed in by the user) or plaid (linked). */
     @Column(nullable = false, length = 10)
     private String source = "manual";
@@ -113,7 +123,15 @@ public class Account {
     }
 
     /** Copies every editable field from a validated request (whose type matches this account). */
-    void apply(AccountRequest request) {
+    /**
+     * @param country for a new account: the country it's added to. Ignored for
+     *                existing accounts, whose country never changes.
+     */
+    void apply(AccountRequest request, Market country) {
+        if (id == null) {
+            this.country = country.country();
+            this.currency = country.currency();
+        }
         this.subtype = request.subtype();
         this.name = request.name().trim();
         this.institution = request.institution().trim();
@@ -163,6 +181,14 @@ public class Account {
 
     public BigDecimal getBalance() {
         return balance;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public String getCountry() {
+        return country;
     }
 
     public String getSource() {

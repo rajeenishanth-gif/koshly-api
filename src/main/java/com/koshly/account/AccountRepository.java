@@ -28,10 +28,10 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
             select a from Account a
             left join fetch a.creditCard
             left join fetch a.loan
-            where a.userId = :userId and a.removedAt is null
+            where a.userId = :userId and a.country = :country and a.removedAt is null
             order by a.type, a.name
             """)
-    List<Account> findAllForUser(@Param("userId") String userId);
+    List<Account> findAllForUser(@Param("userId") String userId, @Param("country") String country);
 
     @Query("""
             select a from Account a

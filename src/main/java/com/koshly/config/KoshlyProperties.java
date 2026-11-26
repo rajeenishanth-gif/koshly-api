@@ -17,6 +17,8 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "koshly")
 public record KoshlyProperties(
+        /** Which data region this deployment serves, e.g. "us" (later also "in"). */
+        @NotBlank @Pattern(regexp = "[a-z]{2,10}") String region,
         @NotNull @Valid Firebase firebase,
         @NotNull @Valid Cors cors,
         @NotNull @Valid Retention retention) {

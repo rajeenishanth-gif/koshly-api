@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.koshly.config.KoshlyProperties;
 import com.koshly.plaid.PlaidConnections;
+import com.koshly.region.Market;
 import com.koshly.user.UserService;
 
 /**
@@ -41,17 +42,19 @@ public class AccountService {
         this.keepRemovedFor = Duration.ofDays(properties.retention().removedAccountDays());
     }
 
+    /** One country's accounts: the given one, or the user's current country. */
     @Transactional(readOnly = true)
-    public List<AccountResponse> list(Jwt jwt) {
-        LocalDate today = LocalDate.now(clock);
-        return accounts.findAllForUser(jwt.getSubject()).stream()
+    public List<AccountResponse> list(Jwt jwt, String country) {
+        LocalDate today = today(jwt);
+        String chosen = country != null ? market(country).country() : users.settingsFor(jwt).country();
+        return accounts.findAllForUser(jwt.getSubject(), chosen).stream()
                 .map(account -> AccountResponse.from(account, today))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public AccountResponse get(Jwt jwt, UUID id) {
-        return AccountResponse.from(find(jwt, id), LocalDate.now(clock));
+        return AccountResponse.from(find(jwt, id), today(jwt));
     }
 
     @Transactional
@@ -59,8 +62,9 @@ public class AccountService {
         users.ensureUserExists(jwt);
         checkRoomFor(jwt, request.type());
         Account account = new Account(jwt.getSubject(), request.type());
-        account.apply(request);
-        return AccountResponse.from(accounts.save(account), LocalDate.now(clock));
+        String country = request.country() != null ? request.country() : users.settingsFor(jwt).country();
+        account.apply(request, market(country));
+        return AccountResponse.from(accounts.save(account), today(jwt));
     }
 
     @Transactional
@@ -70,10 +74,14 @@ public class AccountService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "An account's type can't be changed. Remove it and add a new one.");
         }
-        account.apply(request);
+        if (request.country() != null && !request.country().equals(account.getCountry())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "An account can't move to another country. Remove it and add it in the other country.");
+        }
+        account.apply(request, market(account.getCountry()));
         // No save() needed: JPA writes changes to a loaded entity when the transaction ends.
         accounts.flush();
-        return AccountResponse.from(account, LocalDate.now(clock));
+        return AccountResponse.from(account, today(jwt));
     }
 
     /**
@@ -106,13 +114,23 @@ public class AccountService {
         checkRoomFor(jwt, account.getType());
         account.restore();
         accounts.flush();
-        return AccountResponse.from(account, LocalDate.now(clock));
+        return AccountResponse.from(account, today(jwt));
     }
 
     /** Deletes, for good, accounts removed longer ago than the retention period. Runs nightly. */
     @Transactional
     public int deleteExpiredRemovals() {
         return accounts.deleteRemovedBefore(Instant.now(clock).minus(keepRemovedFor));
+    }
+
+    private static Market market(String country) {
+        return Market.forCountry(country).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Koshly isn't available in that country yet."));
+    }
+
+    /** Today's date where the user lives, so "due today" matches their calendar. */
+    private LocalDate today(Jwt jwt) {
+        return LocalDate.now(clock.withZone(users.settingsFor(jwt).timeZone()));
     }
 
     private void checkRoomFor(Jwt jwt, String type) {

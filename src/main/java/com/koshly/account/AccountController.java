@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -15,12 +16,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * /api/accounts: the signed-in user's credit cards, bank accounts and loans.
  *
- *   GET    /api/accounts        list everything (each item has a "type")
+ *   GET    /api/accounts        the current country's accounts (?country=IN for another)
  *   POST   /api/accounts        add one                 -> 201 Created
  *   GET    /api/accounts/{id}   one of mine             -> 404 if it isn't mine
  *   PUT    /api/accounts/{id}   replace its details (type can't change)
@@ -38,8 +40,9 @@ public class AccountController {
     }
 
     @GetMapping
-    public List<AccountResponse> list(@AuthenticationPrincipal Jwt jwt) {
-        return service.list(jwt);
+    public List<AccountResponse> list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) @Pattern(regexp = "^[A-Z]{2}$") String country) {
+        return service.list(jwt, country);
     }
 
     @GetMapping("/{id}")

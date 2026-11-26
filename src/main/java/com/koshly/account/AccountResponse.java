@@ -17,6 +17,8 @@ public record AccountResponse(
         String institution,
         String last4,
         BigDecimal balance,
+        String country,
+        String currency,
         String source,
         CreditCardInfo creditCard,
         LoanInfo loan) {
@@ -51,6 +53,8 @@ public record AccountResponse(
                 account.getInstitution(),
                 account.getLast4(),
                 account.getBalance(),
+                account.getCountry(),
+                account.getCurrency(),
                 account.getSource(),
                 c == null ? null : new CreditCardInfo(
                         c.getCreditLimit(),
