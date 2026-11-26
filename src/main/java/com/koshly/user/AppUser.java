@@ -25,6 +25,10 @@ public class AppUser {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
+    /** Dashboard section order; see DashboardLayout for the format. Null means the default. */
+    @Column(name = "dashboard_sections", length = 300)
+    private String dashboardSections;
+
     protected AppUser() {
         // for JPA
     }
@@ -43,5 +47,13 @@ public class AppUser {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getDashboardSections() {
+        return dashboardSections;
+    }
+
+    void setDashboardSections(String dashboardSections) {
+        this.dashboardSections = dashboardSections;
     }
 }

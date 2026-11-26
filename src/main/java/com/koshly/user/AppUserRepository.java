@@ -1,5 +1,6 @@
 package com.koshly.user;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
+
+    Optional<AppUser> findByFirebaseUid(String firebaseUid);
 
     /**
      * Creates the user's row the first time they save something. If it already
