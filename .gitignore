@@ -36,3 +36,7 @@ bin/
 ._*
 .Spotlight-V100
 .Trashes
+
+# --- Secrets: never commit ---
+.env
+.env.*

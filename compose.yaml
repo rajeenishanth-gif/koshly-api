@@ -1,0 +1,35 @@
+# Local development: Postgres (and, with --profile full, the API) in containers.
+# Values like ${POSTGRES_PASSWORD} come from the .env file next to this one.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"   # reachable only from your own PC
+    volumes:
+      - koshly-db:/var/lib/postgresql/data   # data survives restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    profiles: ["full"]   # only starts with: docker compose --profile full up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FIREBASE_PROJECT_ID: koshly-dev
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  koshly-db:
