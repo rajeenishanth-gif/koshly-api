@@ -16,21 +16,19 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 @Configuration
 public class FirebaseJwtConfig {
 
-    // Google's public keys for Firebase ID tokens
-    static final String JWKS_URL =
-            "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
-
+    // All addresses come from koshly.firebase.* in application.properties
     @Bean
     JwtDecoder jwtDecoder(KoshlyProperties properties) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(JWKS_URL).build();
-        decoder.setJwtValidator(firebaseValidator(properties.firebaseProjectId()));
+        KoshlyProperties.Firebase firebase = properties.firebase();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(firebase.jwkSetUri()).build();
+        decoder.setJwtValidator(firebaseValidator(firebase.issuerUri(), firebase.projectId()));
         return decoder;
     }
 
     // Not private, so the tests in Step 8 can use it
-    static OAuth2TokenValidator<Jwt> firebaseValidator(String projectId) {
+    static OAuth2TokenValidator<Jwt> firebaseValidator(String issuerUri, String projectId) {
         return new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer("https://securetoken.google.com/" + projectId),
+                JwtValidators.createDefaultWithIssuer(issuerUri),
                 new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains(projectId)),
                 new JwtClaimValidator<String>("sub", sub -> sub != null && !sub.isBlank() && sub.length() <= 128),
                 // Sign-in time must be in the past (60 seconds allowed for clock differences)

@@ -13,14 +13,15 @@ import org.springframework.security.oauth2.jwt.Jwt;
 class FirebaseJwtValidatorTest {
 
     private static final String PROJECT = "koshly-dev";
-    private final OAuth2TokenValidator<Jwt> validator = FirebaseJwtConfig.firebaseValidator(PROJECT);
+    private static final String ISSUER = "https://securetoken.google.com/" + PROJECT;
+    private final OAuth2TokenValidator<Jwt> validator = FirebaseJwtConfig.firebaseValidator(ISSUER, PROJECT);
 
     // A token that should pass; each test changes one thing about it
     private static Jwt token(Consumer<Jwt.Builder> change) {
         Instant now = Instant.now();
         Jwt.Builder builder = Jwt.withTokenValue("test-token")
                 .header("alg", "RS256")
-                .issuer("https://securetoken.google.com/" + PROJECT)
+                .issuer(ISSUER)
                 .audience(List.of(PROJECT))
                 .subject("user-123")
                 .issuedAt(now.minusSeconds(60))
