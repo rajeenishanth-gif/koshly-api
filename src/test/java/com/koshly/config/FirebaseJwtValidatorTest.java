@@ -24,7 +24,8 @@ class FirebaseJwtValidatorTest {
                 .audience(List.of(PROJECT))
                 .subject("user-123")
                 .issuedAt(now.minusSeconds(60))
-                .expiresAt(now.plusSeconds(3600));
+                .expiresAt(now.plusSeconds(3600))
+                .claim("auth_time", now.minusSeconds(120).getEpochSecond());
         change.accept(builder);
         return builder.build();
     }
@@ -49,6 +50,12 @@ class FirebaseJwtValidatorTest {
         Instant past = Instant.now().minusSeconds(7200);
         assertThat(validator.validate(token(b -> b.issuedAt(past).expiresAt(past.plusSeconds(3600))))
                 .hasErrors()).isTrue();
+    }
+
+    @Test
+    void rejectsSignInTimeInTheFuture() {
+        long future = Instant.now().plusSeconds(3600).getEpochSecond();
+        assertThat(validator.validate(token(b -> b.claim("auth_time", future))).hasErrors()).isTrue();
     }
 
     @Test

@@ -1,4 +1,5 @@
-package com.koshly.me;
+package com.koshly.user;
+
 import java.util.Map;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -8,12 +9,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/me")
-public class MeController {
+@RequestMapping("/api/users/current")
+public class CurrentUserController {
 
     @GetMapping
-    public MeResponse me(@AuthenticationPrincipal Jwt jwt) {
-        return new MeResponse(
+    public CurrentUserResponse currentUser(@AuthenticationPrincipal Jwt jwt) {
+        return new CurrentUserResponse(
                 jwt.getSubject(),
                 jwt.getClaimAsString("email"),
                 Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified")),

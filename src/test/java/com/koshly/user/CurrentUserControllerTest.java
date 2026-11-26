@@ -1,4 +1,4 @@
-package com.koshly.me;
+package com.koshly.user;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -17,7 +17,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
-class MeControllerTest {
+class CurrentUserControllerTest {
 
     @Autowired
     private WebApplicationContext context;
@@ -31,12 +31,12 @@ class MeControllerTest {
 
     @Test
     void rejectsRequestsWithoutAToken() throws Exception {
-        mvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/users/current")).andExpect(status().isUnauthorized());
     }
 
     @Test
     void returnsTheSignedInUser() throws Exception {
-        mvc.perform(get("/api/me").with(jwt().jwt(token -> token
+        mvc.perform(get("/api/users/current").with(jwt().jwt(token -> token
                         .subject("user-123")
                         .claim("email", "nish@example.com")
                         .claim("email_verified", true)
@@ -46,6 +46,21 @@ class MeControllerTest {
                 .andExpect(jsonPath("$.email").value("nish@example.com"))
                 .andExpect(jsonPath("$.emailVerified").value(true))
                 .andExpect(jsonPath("$.signInProvider").value("password"));
+    }
+
+    @Test
+    void otherApiEndpointsNeedAVerifiedEmail() throws Exception {
+        mvc.perform(get("/api/hello").with(jwt().jwt(t -> t.claim("email_verified", false))))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/hello").with(jwt().jwt(t -> t.claim("email_verified", true))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void currentUserWorksBeforeEmailIsVerified() throws Exception {
+        mvc.perform(get("/api/users/current").with(jwt().jwt(t -> t.claim("email_verified", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(false));
     }
 
     @Test

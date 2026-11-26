@@ -1,8 +1,8 @@
 package com.koshly.config;
 
+import java.time.Instant;
 import java.util.List;
 
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -14,7 +14,6 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 @Configuration
-@EnableConfigurationProperties(KoshlyProperties.class)
 public class FirebaseJwtConfig {
 
     // Google's public keys for Firebase ID tokens
@@ -33,6 +32,9 @@ public class FirebaseJwtConfig {
         return new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer("https://securetoken.google.com/" + projectId),
                 new JwtClaimValidator<List<String>>("aud", aud -> aud != null && aud.contains(projectId)),
-                new JwtClaimValidator<String>("sub", sub -> sub != null && !sub.isBlank() && sub.length() <= 128));
+                new JwtClaimValidator<String>("sub", sub -> sub != null && !sub.isBlank() && sub.length() <= 128),
+                // Sign-in time must be in the past (60 seconds allowed for clock differences)
+                new JwtClaimValidator<Object>("auth_time", t -> t instanceof Number seconds
+                        && seconds.longValue() <= Instant.now().getEpochSecond() + 60));
     }
 }

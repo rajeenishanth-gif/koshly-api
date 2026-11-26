@@ -7,11 +7,16 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,13 +32,26 @@ public class SecurityConfig {
                         // Let Spring's own error handling through, so errors are reported properly
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
-                        .requestMatchers("/api/**").authenticated()
+                        // Signed in is enough to ask "who am I / am I verified yet?"
+                        .requestMatchers(HttpMethod.GET, "/api/users/current").authenticated()
+                        // Everything else under /api needs a verified email (403 if not)
+                        .requestMatchers("/api/**").access(verifiedEmail())
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults());
         return http.build();
+    }
+
+    // Allows the request only if the verified Firebase token says the email is verified
+    private static AuthorizationManager<RequestAuthorizationContext> verifiedEmail() {
+        return (authentication, context) -> {
+            Authentication auth = authentication.get();
+            boolean verified = auth instanceof JwtAuthenticationToken token
+                    && Boolean.TRUE.equals(token.getToken().getClaimAsBoolean("email_verified"));
+            return new AuthorizationDecision(verified);
+        };
     }
 
     // Lets the web version of the app (http://localhost:8081) call the API from a browser
