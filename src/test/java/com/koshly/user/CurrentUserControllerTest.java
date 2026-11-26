@@ -50,9 +50,9 @@ class CurrentUserControllerTest {
 
     @Test
     void otherApiEndpointsNeedAVerifiedEmail() throws Exception {
-        mvc.perform(get("/api/hello").with(jwt().jwt(t -> t.claim("email_verified", false))))
+        mvc.perform(get("/api/accounts").with(jwt().jwt(t -> t.claim("email_verified", false))))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/hello").with(jwt().jwt(t -> t.claim("email_verified", true))))
+        mvc.perform(get("/api/accounts").with(jwt().jwt(t -> t.claim("email_verified", true))))
                 .andExpect(status().isOk());
     }
 
