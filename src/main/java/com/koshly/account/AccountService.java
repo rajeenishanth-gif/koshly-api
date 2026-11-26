@@ -140,7 +140,7 @@ public class AccountService {
 
     /** Today's date where the user lives, so "due today" matches their calendar. */
     private LocalDate today(Jwt jwt) {
-        return LocalDate.now(clock.withZone(users.settingsFor(jwt).timeZone()));
+        return users.today(jwt);
     }
 
     private void checkRoomFor(Jwt jwt, String type) {

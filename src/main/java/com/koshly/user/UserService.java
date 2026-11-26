@@ -1,5 +1,7 @@
 package com.koshly.user;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.ZoneId;
 
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -31,6 +33,11 @@ public class UserService {
         return users.findByFirebaseUid(jwt.getSubject())
                 .map(u -> new UserSettings(u.getCountry(), u.getCurrency(), ZoneId.of(u.getTimeZone())))
                 .orElse(UserSettings.DEFAULT);
+    }
+
+    /** Today's date where the user lives, so "due today" matches their calendar. */
+    public LocalDate today(Jwt jwt) {
+        return LocalDate.now(Clock.system(settingsFor(jwt).timeZone()));
     }
 
     public record UserSettings(String country, String currency, ZoneId timeZone) {
