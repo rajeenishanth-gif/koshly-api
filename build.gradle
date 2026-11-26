@@ -17,6 +17,8 @@ repositories {
 	mavenCentral()
 }
 
+bootJar { archiveFileName = 'koshly-api.jar' }
+
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
