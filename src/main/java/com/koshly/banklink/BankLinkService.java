@@ -1,0 +1,102 @@
+package com.koshly.banklink;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.koshly.account.Account;
+import com.koshly.region.Market;
+import com.koshly.user.UserService;
+
+/**
+ * Bank connections. Picks the provider from the country (the one shown in the
+ * app), so the same calls work for Plaid in the US and Account Aggregator in India.
+ */
+@Service
+public class BankLinkService {
+
+    private final BankLinkRepository links;
+    private final BankDataProviders providers;
+    private final UserService users;
+    private final Clock clock = Clock.systemUTC();
+
+    public BankLinkService(BankLinkRepository links, BankDataProviders providers, UserService users) {
+        this.links = links;
+        this.providers = providers;
+        this.users = users;
+    }
+
+    /** Which provider a country uses and whether it's ready. */
+    public ProviderInfo providerFor(String country) {
+        Market market = market(country);
+        BankDataProvider provider = providers.forCountry(market);
+        return new ProviderInfo(market.country(), provider.id(), provider.displayName(), provider.isAvailable());
+    }
+
+    /** Starts linking a bank in the given country. 503 while that country's provider isn't ready. */
+    @Transactional
+    public BankDataProvider.LinkStart start(Jwt jwt, String country) {
+        Market market = market(country);
+        BankDataProvider provider = providers.forCountry(market);
+        if (!provider.isAvailable()) {
+            throw notAvailable(provider.displayName());
+        }
+        users.ensureUserExists(jwt);
+        BankLink link = links.save(new BankLink(jwt.getSubject(), market.country(), provider.id()));
+        return provider.start(link);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BankLinkResponse> list(Jwt jwt, String country) {
+        return links.findAllForUser(jwt.getSubject(), market(country).country()).stream()
+                .map(BankLinkResponse::from)
+                .toList();
+    }
+
+    /** Disconnects a bank: revokes access at the provider. Its accounts are removed by the caller. */
+    @Transactional
+    public BankLink disconnect(Jwt jwt, UUID id) {
+        BankLink link = links.findForUser(id, jwt.getSubject())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bank connection not found."));
+        revoke(link);
+        return link;
+    }
+
+    /**
+     * Called when the user removes a linked account. One bank login can hold
+     * several accounts, so access is revoked only when none of them are left.
+     */
+    @Transactional
+    public void accountRemoved(Account account, long otherAccountsStillInUse) {
+        if (account.getBankLinkId() == null || otherAccountsStillInUse > 0) {
+            return;
+        }
+        links.findForUser(account.getBankLinkId(), account.getUserId()).ifPresent(this::revoke);
+    }
+
+    private void revoke(BankLink link) {
+        providers.forLink(link).disconnect(link);
+        link.markRevoked(Instant.now(clock));
+    }
+
+    private static Market market(String country) {
+        return Market.forCountry(country).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Koshly isn't available in that country yet."));
+    }
+
+    static ResponseStatusException notAvailable(String providerName) {
+        return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                "Bank linking with " + providerName + " isn't available yet. You can add accounts yourself for now.");
+    }
+
+    /** What the app needs to show the right "Connect your bank" option. */
+    public record ProviderInfo(String country, String provider, String name, boolean available) {
+    }
+}

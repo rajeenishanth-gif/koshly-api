@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.koshly.config.KoshlyProperties;
-import com.koshly.plaid.PlaidConnections;
+import com.koshly.banklink.BankLinkService;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
 
@@ -30,15 +30,15 @@ public class AccountService {
 
     private final AccountRepository accounts;
     private final UserService users;
-    private final PlaidConnections plaid;
+    private final BankLinkService bankLinks;
     private final Duration keepRemovedFor;
     private final Clock clock = Clock.systemUTC();
 
-    public AccountService(AccountRepository accounts, UserService users, PlaidConnections plaid,
+    public AccountService(AccountRepository accounts, UserService users, BankLinkService bankLinks,
             KoshlyProperties properties) {
         this.accounts = accounts;
         this.users = users;
-        this.plaid = plaid;
+        this.bankLinks = bankLinks;
         this.keepRemovedFor = Duration.ofDays(properties.retention().removedAccountDays());
     }
 
@@ -87,7 +87,7 @@ public class AccountService {
     /**
      * Removes an account: it disappears from the app at once and is deleted for
      * good after the retention period (see {@link #deleteExpiredRemovals}).
-     * A Plaid-linked account is also disconnected from Plaid straight away.
+     * A linked account (Plaid, Account Aggregator) is also disconnected straight away.
      */
     @Transactional
     public RemovedAccountResponse remove(Jwt jwt, UUID id) {
@@ -96,10 +96,20 @@ public class AccountService {
         account.markRemoved(now);
         accounts.flush(); // write removed_at now, before anything else reads the table
         if (account.isLinked()) {
-            plaid.accountRemoved(account);
+            // Revokes the provider's access once no account from that bank login is left.
+            bankLinks.accountRemoved(account, accounts.countByBankLinkIdAndRemovedAtIsNull(account.getBankLinkId()));
         }
         return new RemovedAccountResponse(account.getId(), account.getName(), now,
                 now.plus(keepRemovedFor), !account.isLinked());
+    }
+
+    /** Removes every account that came from a bank connection being disconnected. */
+    @Transactional
+    public void removeAllFromLink(Jwt jwt, UUID bankLinkId) {
+        Instant now = Instant.now(clock);
+        accounts.findAllByUserIdAndBankLinkIdAndRemovedAtIsNull(jwt.getSubject(), bankLinkId)
+                .forEach(a -> a.markRemoved(now));
+        accounts.flush();
     }
 
     /** Undo for {@link #remove}, while the account hasn't been deleted for good yet. */

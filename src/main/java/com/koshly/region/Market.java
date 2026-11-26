@@ -16,19 +16,21 @@ import java.util.stream.Collectors;
  */
 public enum Market {
 
-    US("US", "USD", "us", "America/New_York"),
-    IN("IN", "INR", "in", "Asia/Kolkata");
+    US("US", "USD", "us", "America/New_York", "plaid"),
+    IN("IN", "INR", "in", "Asia/Kolkata", "account_aggregator");
 
     private final String country;
     private final String currency;
     private final String dataRegion;
     private final String defaultTimeZone;
+    private final String bankLinkProvider;
 
-    Market(String country, String currency, String dataRegion, String defaultTimeZone) {
+    Market(String country, String currency, String dataRegion, String defaultTimeZone, String bankLinkProvider) {
         this.country = country;
         this.currency = currency;
         this.dataRegion = dataRegion;
         this.defaultTimeZone = defaultTimeZone;
+        this.bankLinkProvider = bankLinkProvider;
     }
 
     /** ISO 3166 country code, e.g. "IN". */
@@ -47,6 +49,11 @@ public enum Market {
 
     public String defaultTimeZone() {
         return defaultTimeZone;
+    }
+
+    /** Which BankDataProvider links banks there: "plaid" (US) or "account_aggregator" (India). */
+    public String bankLinkProvider() {
+        return bankLinkProvider;
     }
 
     public static Optional<Market> forCountry(String country) {

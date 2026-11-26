@@ -51,6 +51,11 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     long countByUserIdAndTypeAndRemovedAtIsNull(String userId, String type);
 
+    /** Accounts still in use that came from one bank connection. */
+    long countByBankLinkIdAndRemovedAtIsNull(UUID bankLinkId);
+
+    List<Account> findAllByUserIdAndBankLinkIdAndRemovedAtIsNull(String userId, UUID bankLinkId);
+
     /**
      * Deletes accounts removed before the cutoff. Plain SQL so the database's
      * ON DELETE CASCADE also deletes their card and loan details.

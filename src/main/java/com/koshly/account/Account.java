@@ -68,9 +68,13 @@ public class Account {
     @Column(nullable = false, length = 3)
     private String currency = "USD";
 
-    /** manual (typed in by the user) or plaid (linked). */
-    @Column(nullable = false, length = 10)
+    /** manual (typed in by the user), or the provider it was linked through: plaid, account_aggregator. */
+    @Column(nullable = false, length = 20)
     private String source = "manual";
+
+    /** The bank connection it came from (bank_link.id), or null for manual accounts. */
+    @Column(name = "bank_link_id")
+    private UUID bankLinkId;
 
     /** Plaid's id for this account, once bank linking exists. */
     @Column(name = "plaid_account_id", length = 100)
@@ -113,9 +117,13 @@ public class Account {
         this.removedAt = null;
     }
 
-    /** Linked through Plaid (rather than typed in by the user). */
+    /** Linked through a bank-data provider (rather than typed in by the user). */
     public boolean isLinked() {
-        return "plaid".equals(source);
+        return !"manual".equals(source);
+    }
+
+    public UUID getBankLinkId() {
+        return bankLinkId;
     }
 
     public Instant getRemovedAt() {
