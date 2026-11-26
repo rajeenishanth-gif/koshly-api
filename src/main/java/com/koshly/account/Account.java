@@ -80,6 +80,10 @@ public class Account {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** When the user removed it; null while in use. Removed accounts are deleted for good later. */
+    @Column(name = "removed_at")
+    private Instant removedAt;
+
     protected Account() {
         // for JPA
     }
@@ -87,6 +91,25 @@ public class Account {
     public Account(String userId, String type) {
         this.userId = userId;
         this.type = type;
+    }
+
+    /** Hides the account from the user. A clean-up job deletes it after the retention period. */
+    void markRemoved(Instant now) {
+        this.removedAt = now;
+    }
+
+    /** Undoes {@link #markRemoved}. */
+    void restore() {
+        this.removedAt = null;
+    }
+
+    /** Linked through Plaid (rather than typed in by the user). */
+    public boolean isLinked() {
+        return "plaid".equals(source);
+    }
+
+    public Instant getRemovedAt() {
+        return removedAt;
     }
 
     /** Copies every editable field from a validated request (whose type matches this account). */

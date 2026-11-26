@@ -10,11 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -62,6 +65,12 @@ class AccountControllerTest {
 
     @Autowired
     private WebApplicationContext context;
+
+    @Autowired
+    private AccountService accountService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private MockMvc mvc;
 
@@ -127,12 +136,16 @@ class AccountControllerTest {
         mvc.perform(delete("/api/accounts/" + id).with(user("bob")))
                 .andExpect(status().isNotFound());
 
-        mvc.perform(get("/api/accounts/" + id).with(user("alice")))
+        mvc.perform(delete("/api/accounts/" + id).with(user("alice")))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/accounts/" + id + "/restore").with(user("bob")))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/accounts/" + id + "/restore").with(user("alice")))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void updatesAndDeletesMyAccount() throws Exception {
+    void updatesAndRemovesMyAccount() throws Exception {
         String id = add("alice", AUTO_LOAN);
 
         mvc.perform(put("/api/accounts/" + id).with(user("alice"))
@@ -142,9 +155,56 @@ class AccountControllerTest {
                 .andExpect(jsonPath("$.balance").value(17905.22));
 
         mvc.perform(delete("/api/accounts/" + id).with(user("alice")))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Auto Loan"))
+                .andExpect(jsonPath("$.deleteAfter").exists())
+                .andExpect(jsonPath("$.canUndo").value(true));
         mvc.perform(get("/api/accounts/" + id).with(user("alice")))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/accounts").with(user("alice")))
+                .andExpect(jsonPath("$.length()").value(0));
+        // Removing twice: it's already gone.
+        mvc.perform(delete("/api/accounts/" + id).with(user("alice")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void undoBringsARemovedAccountBack() throws Exception {
+        String id = add("alice", CREDIT_CARD);
+        mvc.perform(delete("/api/accounts/" + id).with(user("alice")))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/accounts/" + id + "/restore").with(user("alice")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creditCard.creditLimit").value(12000));
+        mvc.perform(get("/api/accounts").with(user("alice")))
+                .andExpect(jsonPath("$.length()").value(1));
+        // Nothing to undo any more.
+        mvc.perform(post("/api/accounts/" + id + "/restore").with(user("alice")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void cleanupDeletesRemovalsOlderThanTheRetentionPeriod() throws Exception {
+        String old = add("alice", CREDIT_CARD);
+        String recent = add("alice", CHECKING);
+        String inUse = add("alice", AUTO_LOAN);
+        mvc.perform(delete("/api/accounts/" + old).with(user("alice"))).andExpect(status().isOk());
+        mvc.perform(delete("/api/accounts/" + recent).with(user("alice"))).andExpect(status().isOk());
+        // Pretend the first one was removed 31 days ago.
+        jdbc.update("UPDATE account SET removed_at = now() - interval '31 days' WHERE id = ?::uuid", old);
+
+        assertThat(accountService.deleteExpiredRemovals()).isEqualTo(1);
+
+        assertThat(rowsWithId(old)).isZero(); // gone for good, details too (ON DELETE CASCADE)
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credit_card_detail WHERE account_id = ?::uuid",
+                Integer.class, old)).isZero();
+        assertThat(rowsWithId(recent)).isOne(); // still within 30 days: Undo still works
+        assertThat(rowsWithId(inUse)).isOne();
+    }
+
+    private int rowsWithId(String id) {
+        return jdbc.queryForObject("SELECT count(*) FROM account WHERE id = ?::uuid", Integer.class, id);
     }
 
     @Test

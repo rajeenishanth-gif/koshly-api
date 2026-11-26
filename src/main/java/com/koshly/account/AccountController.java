@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  *   POST   /api/accounts        add one                 -> 201 Created
  *   GET    /api/accounts/{id}   one of mine             -> 404 if it isn't mine
  *   PUT    /api/accounts/{id}   replace its details (type can't change)
- *   DELETE /api/accounts/{id}   delete it               -> 204 No Content
+ *   DELETE /api/accounts/{id}   remove it: hidden now, deleted for good after 30 days
+ *   POST   /api/accounts/{id}/restore   undo a removal (manual accounts only)
  */
 @RestController
 @RequestMapping("/api/accounts")
@@ -60,8 +61,12 @@ public class AccountController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        service.delete(jwt, id);
-        return ResponseEntity.noContent().build();
+    public RemovedAccountResponse remove(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.remove(jwt, id);
+    }
+
+    @PostMapping("/{id}/restore")
+    public AccountResponse restore(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.restore(jwt, id);
     }
 }

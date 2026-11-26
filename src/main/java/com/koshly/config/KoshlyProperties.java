@@ -3,6 +3,7 @@ package com.koshly.config;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -17,7 +18,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "koshly")
 public record KoshlyProperties(
         @NotNull @Valid Firebase firebase,
-        @NotNull @Valid Cors cors) {
+        @NotNull @Valid Cors cors,
+        @NotNull @Valid Retention retention) {
 
     /** Where Firebase login tokens come from and how to check them. */
     public record Firebase(
@@ -27,5 +29,12 @@ public record KoshlyProperties(
     }
 
     public record Cors(@NotNull List<String> allowedOrigins) {
+    }
+
+    /**
+     * How long removed accounts are kept (for Undo) before being deleted for good,
+     * and when the clean-up runs (a Spring cron expression, UTC).
+     */
+    public record Retention(@Min(1) int removedAccountDays, @NotBlank String cleanupCron) {
     }
 }
