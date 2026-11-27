@@ -85,7 +85,8 @@ public class AccountCountry {
         return t == null || t.isBlank() ? Optional.empty() : Optional.of(t);
     }
 
-    private static Optional<String> tenantOf(Jwt jwt) {
+    /** The Firebase tenant the user signed in through, if any (none = the default country). */
+    public static Optional<String> tenantOf(Jwt jwt) {
         if (jwt.getClaims().get("firebase") instanceof Map<?, ?> firebase
                 && firebase.get("tenant") instanceof String tenant && !tenant.isBlank()) {
             return Optional.of(tenant);

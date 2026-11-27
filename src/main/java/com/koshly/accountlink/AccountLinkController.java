@@ -36,7 +36,7 @@ public class AccountLinkController {
     }
 
     @PostMapping("/codes")
-    public ResponseEntity<AccountLinkService.CodeSent> sendCode(@AuthenticationPrincipal Jwt jwt,
+    public ResponseEntity<OneTimeCodes.CodeSent> sendCode(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody SendCodeRequest request) {
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(service.sendCode(jwt, request.country(), Channel.from(request.channel()), request.destination()));

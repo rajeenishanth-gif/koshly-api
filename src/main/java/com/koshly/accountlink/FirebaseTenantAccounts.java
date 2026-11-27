@@ -1,42 +1,28 @@
 package com.koshly.accountlink;
 
-import java.io.IOException;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.AuthErrorCode;
-import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.multitenancy.TenantAwareFirebaseAuth;
 import com.google.firebase.auth.UserRecord;
-import com.koshly.config.KoshlyProperties;
+import com.google.firebase.auth.multitenancy.TenantAwareFirebaseAuth;
+import com.koshly.config.FirebaseAdmin;
 
-/**
- * Uses the Firebase Admin SDK. Its credentials come from Google's "application
- * default credentials": on Cloud Run, the service's own account (it needs the
- * "Service Account Token Creator" role to sign tokens); on your PC, a service
- * account key file named by GOOGLE_APPLICATION_CREDENTIALS. Started on first
- * use, so the API still starts without credentials.
- */
+/** Finds or creates the user in another country's tenant and signs them in (see {@link FirebaseAdmin}). */
 @Component
 class FirebaseTenantAccounts implements TenantAccounts {
 
-    private static final String APP_NAME = "koshly-admin";
+    private final FirebaseAdmin admin;
 
-    private final String projectId;
-
-    FirebaseTenantAccounts(KoshlyProperties properties) {
-        this.projectId = properties.firebase().projectId();
+    FirebaseTenantAccounts(FirebaseAdmin admin) {
+        this.admin = admin;
     }
 
     @Override
     public String signInTokenFor(String tenantId, Channel channel, String destination) {
-        TenantAwareFirebaseAuth auth = FirebaseAuth.getInstance(app()).getTenantManager().getAuthForTenant(tenantId);
+        TenantAwareFirebaseAuth auth = admin.auth().getTenantManager().getAuthForTenant(tenantId);
         try {
             UserRecord user = findOrCreate(auth, channel, destination);
             return auth.createCustomToken(user.getUid());
@@ -60,24 +46,6 @@ class FirebaseTenantAccounts implements TenantAccounts {
                 create.setPhoneNumber(destination); // just confirmed by the code
             }
             return auth.createUser(create);
-        }
-    }
-
-    private synchronized FirebaseApp app() {
-        for (FirebaseApp existing : FirebaseApp.getApps()) {
-            if (existing.getName().equals(APP_NAME)) {
-                return existing;
-            }
-        }
-        try {
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.getApplicationDefault())
-                    .setProjectId(projectId)
-                    .build();
-            return FirebaseApp.initializeApp(options, APP_NAME);
-        } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Adding a country isn't set up on this server yet.", e);
         }
     }
 }

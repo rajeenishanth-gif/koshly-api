@@ -29,6 +29,10 @@ public class VerificationCode {
     @Column(nullable = false, updatable = false, length = 10)
     private String channel;
 
+    /** add_country | phone */
+    @Column(nullable = false, updatable = false, length = 20)
+    private String purpose;
+
     @Column(nullable = false, updatable = false, length = 254)
     private String destination;
 
@@ -53,8 +57,9 @@ public class VerificationCode {
         // for JPA
     }
 
-    VerificationCode(String userId, String country, Channel channel, String destination, String codeHash,
-            Instant expiresAt) {
+    VerificationCode(String userId, String country, CodePurpose purpose, Channel channel, String destination,
+            String codeHash, Instant expiresAt) {
+        this.purpose = purpose.value();
         this.userId = userId;
         this.country = country;
         this.channel = channel.value();
@@ -81,6 +86,10 @@ public class VerificationCode {
 
     public String getCountry() {
         return country;
+    }
+
+    public CodePurpose getPurpose() {
+        return CodePurpose.from(purpose);
     }
 
     public Channel getChannel() {
