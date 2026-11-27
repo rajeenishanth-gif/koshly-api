@@ -30,6 +30,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	runtimeOnly 'org.postgresql:postgresql'
+	// Cloud SQL connector: lets the API on Cloud Run reach Cloud SQL using its service
+	// account (no IP allow-lists, no certificates to manage). Only used when DB_URL names it.
+	runtimeOnly 'com.google.cloud.sql:postgres-socket-factory:1.28.6'
 
 	// Firebase Admin: signs a user in to another country's account (a Firebase tenant)
 	// after they confirm a code. Not managed by Spring Boot, so it needs a version.

@@ -29,6 +29,13 @@ class CodeSendersTest {
     }
 
     @Test
+    void theDisabledSenderSaysNotYet() {
+        assertThatThrownBy(() -> new DisabledCodeSender().send(Channel.SMS, "+14695550142", "123456"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("aren't available yet");
+    }
+
+    @Test
     void theTextHasTheCodeAndNoLink() {
         assertThat(TwilioCodeSender.body("483921")).contains("483921").doesNotContain("http");
     }
