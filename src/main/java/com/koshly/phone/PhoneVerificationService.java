@@ -14,6 +14,8 @@ import com.koshly.accountlink.OneTimeCodes;
 import com.koshly.accountlink.VerificationCode;
 import com.koshly.config.SessionCheck;
 import com.koshly.region.AccountCountry;
+import com.koshly.region.Market;
+import com.koshly.region.MobileNumbers;
 import com.koshly.user.UserService;
 
 /**
@@ -41,7 +43,12 @@ public class PhoneVerificationService {
     @Transactional
     public OneTimeCodes.CodeSent sendCode(Jwt jwt, String rawPhone) {
         String phone = AccountLinkService.normalizePhone(rawPhone);
-        String country = accountCountry.of(jwt).country();
+        Market market = accountCountry.of(jwt);
+        if (!MobileNumbers.allowedFor(market, phone)) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    MobileNumbers.notAllowedMessage(market));
+        }
+        String country = market.country();
         sessions.requireActive(jwt);
         users.ensureUserExists(jwt);
         return codes.issue(jwt.getSubject(), country, CodePurpose.PHONE, Channel.SMS, phone);

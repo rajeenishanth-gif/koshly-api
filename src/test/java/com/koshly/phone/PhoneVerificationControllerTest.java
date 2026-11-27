@@ -143,6 +143,31 @@ class PhoneVerificationControllerTest {
         verify(phones, never()).markVerified(anyString(), any(), anyString());
     }
 
+    private ResultActions requestCode(RequestPostProcessor who, String phone) throws Exception {
+        return mvc.perform(post("/api/users/current/phone/codes").with(who)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"phone\":\"" + phone + "\"}"));
+    }
+
+    @Test
+    void onlyTextsNumbersFromTheAccountsCountry() throws Exception {
+        requestCode(user("alice"), "+447700900123").andExpect(status().isBadRequest()); // UK
+        requestCode(user("alice"), "+18765550142").andExpect(status().isBadRequest()); // Jamaica, also +1
+        requestCode(user("alice"), "+15550142").andExpect(status().isBadRequest()); // too short for the US
+        requestCode(indian("priya"), "+14695550142").andExpect(status().isBadRequest()); // US number, Indian account
+        verify(sender, never()).send(any(), anyString(), anyString());
+    }
+
+    @Test
+    void oneNumberGetsAtMostFiveCodesADay() throws Exception {
+        // Five different people asking for the same number (the per-user limit isn't what stops them).
+        for (String who : new String[] {"u1", "u2", "u3", "u4", "u5"}) {
+            requestCode(user(who), "+14695550142").andExpect(status().isAccepted());
+        }
+        requestCode(user("u6"), "+14695550142").andExpect(status().isTooManyRequests());
+        // Another number still works.
+        requestCode(user("u6"), "+14695550143").andExpect(status().isAccepted());
+    }
+
     @Test
     void rejectsANumberWithoutACountryCode() throws Exception {
         mvc.perform(post("/api/users/current/phone/codes").with(user("alice"))

@@ -13,4 +13,10 @@ public interface VerificationCodeRepository extends JpaRepository<VerificationCo
 
     /** For the rate limit: codes this user asked for since a moment. */
     long countByUserIdAndCreatedAtAfter(String userId, Instant since);
+
+    /** For the SMS limits: codes sent to one phone number (by anyone) since a moment. */
+    long countByDestinationAndCreatedAtAfter(String destination, Instant since);
+
+    /** For the SMS limits: all codes sent by one channel ("sms") since a moment. */
+    long countByChannelAndCreatedAtAfter(String channel, Instant since);
 }

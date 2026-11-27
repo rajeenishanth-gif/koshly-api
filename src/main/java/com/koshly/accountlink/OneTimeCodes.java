@@ -15,6 +15,8 @@ import org.springframework.web.server.ResponseStatusException;
  * 6-digit codes sent by email or text, shared by "Add a country" and phone
  * verification. Codes are stored hashed, last 10 minutes, allow 5 tries and
  * work once. Each user can ask for 5 codes an hour, whatever they're for.
+ * Text messages have two more limits against SMS pumping (see {@link CodeSettings}):
+ * per phone number per day, from all users together, and per day for the whole API.
  *
  * <p>Callers run inside their own transaction. {@link #use} counts a wrong try
  * before throwing, so the caller's transaction must not roll back on
@@ -29,13 +31,15 @@ public class OneTimeCodes {
 
     private final VerificationCodeRepository codes;
     private final CodeSender sender;
+    private final CodeSettings settings;
     private final BCryptPasswordEncoder hasher = new BCryptPasswordEncoder();
     private final SecureRandom random = new SecureRandom();
     private final Clock clock = Clock.systemUTC();
 
-    public OneTimeCodes(VerificationCodeRepository codes, CodeSender sender) {
+    public OneTimeCodes(VerificationCodeRepository codes, CodeSender sender, CodeSettings settings) {
         this.codes = codes;
         this.sender = sender;
+        this.settings = settings;
     }
 
     /** Creates a code, sends it, and returns what the app needs to show. */
@@ -44,6 +48,18 @@ public class OneTimeCodes {
         if (codes.countByUserIdAndCreatedAtAfter(userId, now.minus(Duration.ofHours(1))) >= MAX_CODES_PER_HOUR) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "Too many codes requested. Please wait an hour and try again.");
+        }
+        if (channel == Channel.SMS) {
+            Instant dayAgo = now.minus(Duration.ofDays(1));
+            if (codes.countByDestinationAndCreatedAtAfter(destination, dayAgo) >= settings.smsPerNumberPerDay()) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Too many codes were sent to this number today. Please try again tomorrow.");
+            }
+            if (codes.countByChannelAndCreatedAtAfter(Channel.SMS.value(), dayAgo) >= settings.smsPerDay()) {
+                // Unusual volume: likely abuse. Stop texting and let someone look before the bill grows.
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Text messages are paused right now. Please try again later.");
+            }
         }
         String code = "%06d".formatted(random.nextInt(1_000_000));
         VerificationCode saved = codes.save(new VerificationCode(userId, country, purpose, channel, destination,

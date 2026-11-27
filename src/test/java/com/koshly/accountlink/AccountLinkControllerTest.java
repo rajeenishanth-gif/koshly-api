@@ -95,9 +95,18 @@ class AccountLinkControllerTest {
 
     @Test
     void aMobileNumberWorksToo() throws Exception {
-        String[] sent = sendCode(user("alice"), "sms", "+1 (555) 201-4477");
+        // Adding India by phone: an Indian mobile number.
+        String[] sent = sendCode(user("alice"), "sms", "+91 98765 43210");
         verifyCode(user("alice"), sent[0], sent[1]).andExpect(status().isOk());
-        verify(tenants).signInTokenFor(TestUsers.INDIA_TENANT, Channel.SMS, "+15552014477");
+        verify(tenants).signInTokenFor(TestUsers.INDIA_TENANT, Channel.SMS, "+919876543210");
+    }
+
+    @Test
+    void addingIndiaByPhoneNeedsAnIndianNumber() throws Exception {
+        mvc.perform(post("/api/account-links/codes").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"country\":\"IN\",\"channel\":\"sms\",\"destination\":\"+14695550142\"}"))
+                .andExpect(status().isBadRequest());
+        verify(sender, never()).send(any(), anyString(), anyString());
     }
 
     @Test

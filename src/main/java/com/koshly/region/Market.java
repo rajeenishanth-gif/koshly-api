@@ -16,16 +16,19 @@ import java.util.stream.Collectors;
  */
 public enum Market {
 
-    US("US", "USD", "us", "America/New_York", "plaid"),
-    IN("IN", "INR", "in", "Asia/Kolkata", "account_aggregator");
+    US("US", "USD", "us", "America/New_York", "plaid", "+1"),
+    IN("IN", "INR", "in", "Asia/Kolkata", "account_aggregator", "+91");
 
     private final String country;
     private final String currency;
     private final String dataRegion;
     private final String defaultTimeZone;
     private final String bankLinkProvider;
+    private final String dialCode;
 
-    Market(String country, String currency, String dataRegion, String defaultTimeZone, String bankLinkProvider) {
+    Market(String country, String currency, String dataRegion, String defaultTimeZone, String bankLinkProvider,
+            String dialCode) {
+        this.dialCode = dialCode;
         this.country = country;
         this.currency = currency;
         this.dataRegion = dataRegion;
@@ -54,6 +57,11 @@ public enum Market {
     /** Which BankDataProvider links banks there: "plaid" (US) or "account_aggregator" (India). */
     public String bankLinkProvider() {
         return bankLinkProvider;
+    }
+
+    /** International dialing code for its mobile numbers, e.g. "+91". */
+    public String dialCode() {
+        return dialCode;
     }
 
     public static Optional<Market> forCountry(String country) {

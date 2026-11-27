@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.koshly.config.SessionCheck;
 import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
+import com.koshly.region.MobileNumbers;
 import com.koshly.user.UserService;
 
 /**
@@ -58,6 +59,9 @@ public class AccountLinkService {
                     "Adding " + target.country() + " isn't available yet.");
         }
         String destination = normalize(channel, rawDestination);
+        if (channel == Channel.SMS && !MobileNumbers.allowedFor(target, destination)) {
+            throw bad(MobileNumbers.notAllowedMessage(target));
+        }
         sessions.requireActive(jwt); // opening another account: make sure this session wasn't revoked
         users.ensureUserExists(jwt);
         return codes.issue(jwt.getSubject(), target.country(), CodePurpose.ADD_COUNTRY, channel, destination);
