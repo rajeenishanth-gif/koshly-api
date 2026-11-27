@@ -64,7 +64,7 @@ public class CreditCardDetail {
         this.apr = details.apr();
         this.color = details.color();
         AccountRequest.Promo p = details.promo();
-        this.promo = p == null ? null : new CardPromo(p.type(), p.apr(), p.balance(), p.endDate(), p.fee());
+        this.promo = p == null ? null : new CardPromo(p.type(), p.apr(), p.balance(), p.endDate(), p.fee(), p.hasDeferredInterest());
     }
 
     public BigDecimal getCreditLimit() {

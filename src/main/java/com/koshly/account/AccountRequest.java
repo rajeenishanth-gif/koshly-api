@@ -150,7 +150,15 @@ public record AccountRequest(
             @DecimalMin(value = "0.00", message = "Transfer fee can't be negative.")
             @DecimalMax(value = MAX_MONEY, message = "Transfer fee looks too large.")
             @Digits(integer = 9, fraction = 2, message = "Use at most 2 decimal places.")
-            BigDecimal fee) {
+            BigDecimal fee,
+
+            /** Optional, default false: interest is charged back to day one if the promo isn't paid off in time. */
+            Boolean deferredInterest) {
+
+        // Not named isX/getX, so JSON (Jackson) never sees it as a second "deferredInterest" property.
+        public boolean hasDeferredInterest() {
+            return Boolean.TRUE.equals(deferredInterest);
+        }
     }
 
     public record LoanDetails(

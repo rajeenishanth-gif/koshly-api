@@ -25,11 +25,16 @@ public class CardPromo {
     @Column(name = "promo_fee", precision = 12, scale = 2)
     private BigDecimal fee;
 
+    /** Deferred interest: interest is charged back to day one if any promo balance is left at the end. */
+    @Column(name = "promo_deferred_interest")
+    private Boolean deferredInterest;
+
     protected CardPromo() {
         // for JPA
     }
 
-    CardPromo(String type, BigDecimal apr, BigDecimal balance, LocalDate endDate, BigDecimal fee) {
+    CardPromo(String type, BigDecimal apr, BigDecimal balance, LocalDate endDate, BigDecimal fee, boolean deferredInterest) {
+        this.deferredInterest = deferredInterest;
         this.type = type;
         this.apr = apr;
         this.balance = balance;
@@ -55,5 +60,9 @@ public class CardPromo {
 
     public BigDecimal getFee() {
         return fee;
+    }
+
+    public boolean isDeferredInterest() {
+        return Boolean.TRUE.equals(deferredInterest);
     }
 }

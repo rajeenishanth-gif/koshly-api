@@ -76,6 +76,7 @@ public record AccountResponse(
     private static AccountRequest.Promo promoOf(CardPromo p) {
         return p == null || p.getType() == null
                 ? null
-                : new AccountRequest.Promo(p.getType(), p.getApr(), p.getBalance(), p.getEndDate(), p.getFee());
+                : new AccountRequest.Promo(p.getType(), p.getApr(), p.getBalance(), p.getEndDate(), p.getFee(),
+                        p.isDeferredInterest());
     }
 }
