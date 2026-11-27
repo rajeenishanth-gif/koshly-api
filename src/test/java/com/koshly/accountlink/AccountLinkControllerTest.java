@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.jayway.jsonpath.JsonPath;
+import com.koshly.config.SessionCheck;
 import com.koshly.testsupport.KoshlyTest;
 import com.koshly.testsupport.TestUsers;
 
@@ -46,6 +47,10 @@ class AccountLinkControllerTest {
 
     @MockitoBean
     private TenantAccounts tenants;
+
+    /** Firebase's "is this session still active?" check: a stand-in that says yes. */
+    @MockitoBean
+    private SessionCheck sessions;
 
     private MockMvc mvc;
 

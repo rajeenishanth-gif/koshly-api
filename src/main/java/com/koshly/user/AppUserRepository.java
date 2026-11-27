@@ -10,6 +10,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
+    /**
+     * Deletes the user's row; the database deletes their accounts, bank links
+     * and codes with it (ON DELETE CASCADE). Flushes pending changes first and
+     * clears the session after, so nothing stale is written back.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "DELETE FROM app_user WHERE firebase_uid = :firebaseUid", nativeQuery = true)
+    int deleteByFirebaseUid(@Param("firebaseUid") String firebaseUid);
+
     Optional<AppUser> findByFirebaseUid(String firebaseUid);
 
     /**

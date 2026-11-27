@@ -11,10 +11,13 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.AbstractFirebaseAuth;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.cloud.FirestoreClient;
+import com.google.cloud.firestore.Firestore;
 
 /**
  * The Firebase Admin SDK, for changing Firebase users from the server (create
- * a user in another country, set a verified phone number).
+ * a user in another country, set a verified phone number, check a session is
+ * still active, delete an account).
  *
  * <p>Credentials come from Google's "application default credentials": on Cloud
  * Run, the service's own account (it needs the "Service Account Token Creator"
@@ -41,6 +44,11 @@ public class FirebaseAdmin {
     /** Users of one tenant (one country's separate accounts), or the default when tenantId is null. */
     public AbstractFirebaseAuth auth(String tenantId) {
         return tenantId == null ? auth() : auth().getTenantManager().getAuthForTenant(tenantId);
+    }
+
+    /** The app's Firestore database (profiles and usernames), with admin rights. */
+    public Firestore firestore() {
+        return FirestoreClient.getFirestore(app());
     }
 
     private synchronized FirebaseApp app() {

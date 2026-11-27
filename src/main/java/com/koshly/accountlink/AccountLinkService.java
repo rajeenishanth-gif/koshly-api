@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.koshly.config.SessionCheck;
 import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
@@ -32,9 +33,11 @@ public class AccountLinkService {
     private final TenantAccounts tenants;
     private final AccountCountry accountCountry;
     private final UserService users;
+    private final SessionCheck sessions;
 
     public AccountLinkService(OneTimeCodes codes, TenantAccounts tenants, AccountCountry accountCountry,
-            UserService users) {
+            UserService users, SessionCheck sessions) {
+        this.sessions = sessions;
         this.codes = codes;
         this.tenants = tenants;
         this.accountCountry = accountCountry;
@@ -55,6 +58,7 @@ public class AccountLinkService {
                     "Adding " + target.country() + " isn't available yet.");
         }
         String destination = normalize(channel, rawDestination);
+        sessions.requireActive(jwt); // opening another account: make sure this session wasn't revoked
         users.ensureUserExists(jwt);
         return codes.issue(jwt.getSubject(), target.country(), CodePurpose.ADD_COUNTRY, channel, destination);
     }
@@ -62,6 +66,7 @@ public class AccountLinkService {
     /** Checks the code; if right, returns a sign-in token for that country's account. */
     @Transactional(noRollbackFor = ResponseStatusException.class) // a wrong try still counts
     public LinkedAccount verify(Jwt jwt, UUID id, String code) {
+        sessions.requireActive(jwt);
         VerificationCode vc = codes.use(jwt.getSubject(), id, CodePurpose.ADD_COUNTRY, code);
         Market target = Market.forCountry(vc.getCountry()).orElseThrow();
         String tenant = accountCountry.tenantFor(target).orElseThrow(() ->

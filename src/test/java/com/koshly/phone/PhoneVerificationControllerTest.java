@@ -33,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.jayway.jsonpath.JsonPath;
 import com.koshly.accountlink.Channel;
 import com.koshly.accountlink.CodeSender;
+import com.koshly.config.SessionCheck;
 import com.koshly.testsupport.KoshlyTest;
 import com.koshly.testsupport.TestUsers;
 
@@ -53,6 +54,9 @@ class PhoneVerificationControllerTest {
 
     @MockitoBean
     private PhoneNumbers phones;
+
+    @MockitoBean
+    private SessionCheck sessions;
 
     private MockMvc mvc;
 
@@ -128,6 +132,15 @@ class PhoneVerificationControllerTest {
                 .when(phones).markVerified(anyString(), any(), anyString());
         String[] sent = sendCode(user("alice"), "+14695550142");
         verifyCode(user("alice"), sent[0], sent[1]).andExpect(status().isConflict());
+    }
+
+    @Test
+    void aRevokedSessionCantVerify() throws Exception {
+        String[] sent = sendCode(user("alice"), "+14695550142");
+        doThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Your session has ended. Please sign in again."))
+                .when(sessions).requireActive(any());
+        verifyCode(user("alice"), sent[0], sent[1]).andExpect(status().isUnauthorized());
+        verify(phones, never()).markVerified(anyString(), any(), anyString());
     }
 
     @Test

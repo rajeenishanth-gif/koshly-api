@@ -74,6 +74,14 @@ public class BankLinkService {
         return link;
     }
 
+    /** Account deletion: revokes access at the provider for every bank connection still active. */
+    @Transactional
+    public void disconnectAll(Jwt jwt) {
+        links.findAllForUser(jwt.getSubject(), accountCountry.of(jwt).country()).stream()
+                .filter(l -> !BankLink.REVOKED.equals(l.getStatus()))
+                .forEach(this::revoke);
+    }
+
     /**
      * Called when the user removes a linked account. One bank login can hold
      * several accounts, so access is revoked only when none of them are left.
