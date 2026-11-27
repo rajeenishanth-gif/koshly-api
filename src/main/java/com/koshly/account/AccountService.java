@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.koshly.config.KoshlyProperties;
 import com.koshly.banklink.BankLinkService;
+import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
 
@@ -31,23 +32,24 @@ public class AccountService {
     private final AccountRepository accounts;
     private final UserService users;
     private final BankLinkService bankLinks;
+    private final AccountCountry accountCountry;
     private final Duration keepRemovedFor;
     private final Clock clock = Clock.systemUTC();
 
     public AccountService(AccountRepository accounts, UserService users, BankLinkService bankLinks,
-            KoshlyProperties properties) {
+            AccountCountry accountCountry, KoshlyProperties properties) {
         this.accounts = accounts;
         this.users = users;
         this.bankLinks = bankLinks;
+        this.accountCountry = accountCountry;
         this.keepRemovedFor = Duration.ofDays(properties.retention().removedAccountDays());
     }
 
-    /** One country's accounts: the given one, or the user's current country. */
+    /** The signed-in account's cards, accounts and loans (all in the account's country). */
     @Transactional(readOnly = true)
-    public List<AccountResponse> list(Jwt jwt, String country) {
+    public List<AccountResponse> list(Jwt jwt) {
         LocalDate today = today(jwt);
-        String chosen = country != null ? market(country).country() : users.settingsFor(jwt).country();
-        return accounts.findAllForUser(jwt.getSubject(), chosen).stream()
+        return accounts.findAllForUser(jwt.getSubject(), accountCountry.of(jwt).country()).stream()
                 .map(account -> AccountResponse.from(account, today))
                 .toList();
     }
@@ -62,8 +64,14 @@ public class AccountService {
         users.ensureUserExists(jwt);
         checkRoomFor(jwt, request.type());
         Account account = new Account(jwt.getSubject(), request.type());
-        String country = request.country() != null ? request.country() : users.settingsFor(jwt).country();
-        account.apply(request, market(country));
+        // The country always comes from the sign-in, never from the request.
+        Market country = accountCountry.of(jwt);
+        if (request.country() != null && !request.country().equals(country.country())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "This Koshly account is for " + country.country() + ". Sign in to your "
+                            + request.country() + " account to add it there.");
+        }
+        account.apply(request, country);
         return AccountResponse.from(accounts.save(account), today(jwt));
     }
 
@@ -76,7 +84,7 @@ public class AccountService {
         }
         if (request.country() != null && !request.country().equals(account.getCountry())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "An account can't move to another country. Remove it and add it in the other country.");
+                    "An account can't move to another country. Add it in your Koshly account for that country.");
         }
         account.apply(request, market(account.getCountry()));
         // No save() needed: JPA writes changes to a loaded entity when the transaction ends.

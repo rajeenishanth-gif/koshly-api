@@ -44,12 +44,15 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // Allows the request only if the verified Firebase token says the email is verified
+    // Allows the request only if the account is confirmed: its email is verified, or
+    // it has a phone number (Koshly only sets one after the user confirms a code
+    // sent to it, see AccountLinkService; Firebase phone sign-in verifies it too).
     private static AuthorizationManager<RequestAuthorizationContext> verifiedEmail() {
         return (authentication, context) -> {
             Authentication auth = authentication.get();
             boolean verified = auth instanceof JwtAuthenticationToken token
-                    && Boolean.TRUE.equals(token.getToken().getClaimAsBoolean("email_verified"));
+                    && (Boolean.TRUE.equals(token.getToken().getClaimAsBoolean("email_verified"))
+                            || token.getToken().getClaimAsString("phone_number") != null);
             return new AuthorizationDecision(verified);
         };
     }

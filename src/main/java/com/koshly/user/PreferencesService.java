@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.koshly.config.KoshlyProperties;
+import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 
 @Service
@@ -17,9 +18,12 @@ public class PreferencesService {
 
     private final AppUserRepository users;
     private final UserService userService;
+    private final AccountCountry accountCountry;
     private final String region;
 
-    public PreferencesService(AppUserRepository users, UserService userService, KoshlyProperties properties) {
+    public PreferencesService(AppUserRepository users, UserService userService, AccountCountry accountCountry,
+            KoshlyProperties properties) {
+        this.accountCountry = accountCountry;
         this.users = users;
         this.userService = userService;
         this.region = properties.region();
@@ -31,9 +35,10 @@ public class PreferencesService {
         return users.findByFirebaseUid(jwt.getSubject())
                 .map(PreferencesService::toResponse)
                 .orElseGet(() -> {
-                    UserService.UserSettings d = UserService.UserSettings.DEFAULT;
-                    return new PreferencesResponse(DashboardLayout.defaults(), d.country(), d.currency(),
-                            d.timeZone().getId(), region);
+                    // No row yet: the defaults for the account's country (from its sign-in).
+                    Market m = accountCountry.of(jwt);
+                    return new PreferencesResponse(DashboardLayout.defaults(), m.country(), m.currency(),
+                            m.defaultTimeZone(), region);
                 });
     }
 
@@ -46,11 +51,6 @@ public class PreferencesService {
         if (sections != null) {
             badRequestIf(DashboardLayout.problemWith(sections));
         }
-        Market market = null;
-        if (request.country() != null) {
-            market = Market.forCountry(request.country()).orElseThrow(() -> badRequest(
-                    "Koshly isn't available in that country yet. Supported: " + String.join(", ", Market.COUNTRIES) + "."));
-        }
         if (request.timeZone() != null && !ZoneId.getAvailableZoneIds().contains(request.timeZone())) {
             throw badRequest("Unknown time zone.");
         }
@@ -59,10 +59,6 @@ public class PreferencesService {
         AppUser user = users.findByFirebaseUid(jwt.getSubject()).orElseThrow();
         if (sections != null) {
             user.setDashboardSections(DashboardLayout.format(sections));
-        }
-        if (market != null) {
-            user.setCountry(market.country());
-            user.setCurrency(market.currency());
         }
         if (request.timeZone() != null) {
             user.setTimeZone(request.timeZone());

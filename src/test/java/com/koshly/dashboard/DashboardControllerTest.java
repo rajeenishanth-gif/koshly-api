@@ -19,6 +19,8 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.koshly.testsupport.KoshlyTest;
 
+import static com.koshly.testsupport.TestUsers.indian;
+
 /** Runs against the throwaway test database (see KoshlyTest). Each test is rolled back. */
 @KoshlyTest
 @Transactional
@@ -91,15 +93,14 @@ class DashboardControllerTest {
     }
 
     @Test
-    void eachCountryHasItsOwnDashboard() throws Exception {
-        add("alice", CHECKING); // a US account
-        mvc.perform(get("/api/dashboard?country=IN").with(user("alice")))
+    void anIndianAccountHasItsOwnDashboardInRupees() throws Exception {
+        add("alice", CHECKING); // a US account's money
+        mvc.perform(get("/api/dashboard").with(indian("priya")))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.country").value("IN"))
                 .andExpect(jsonPath("$.currency").value("INR"))
                 .andExpect(jsonPath("$.cash").value(0))
                 .andExpect(jsonPath("$.upcoming.length()").value(0));
-        mvc.perform(get("/api/dashboard?country=FR").with(user("alice")))
-                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -19,6 +19,8 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.koshly.testsupport.KoshlyTest;
 
+import static com.koshly.testsupport.TestUsers.indian;
+
 /** Runs against the throwaway test database (see KoshlyTest). Each test is rolled back. */
 @KoshlyTest
 @Transactional
@@ -55,23 +57,26 @@ class PreferencesControllerTest {
     }
 
     @Test
-    void choosingIndiaSwitchesTheCurrencyToRupees() throws Exception {
-        mvc.perform(put(URL).with(user("priya")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"country\": \"IN\", \"timeZone\": \"Asia/Kolkata\"}"))
+    void anIndianAccountIsInIndiaAndItsCountryCantChange() throws Exception {
+        mvc.perform(get(URL).with(indian("priya")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.country").value("IN"))
                 .andExpect(jsonPath("$.currency").value("INR"))
-                .andExpect(jsonPath("$.timeZone").value("Asia/Kolkata"))
-                // the dashboard order wasn't sent, so it's unchanged (the default)
-                .andExpect(jsonPath("$.dashboard[0].section").value("upcoming"));
+                .andExpect(jsonPath("$.timeZone").value("Asia/Kolkata"));
+
+        // Asking for another country does nothing: the country comes from the sign-in.
+        mvc.perform(put(URL).with(indian("priya")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"country\": \"US\", \"timeZone\": \"Asia/Kolkata\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.country").value("IN"))
+                .andExpect(jsonPath("$.currency").value("INR"));
     }
 
     @Test
-    void rejectsUnsupportedCountriesAndTimeZones() throws Exception {
-        for (String body : new String[] {"{\"country\": \"FR\"}", "{\"timeZone\": \"Mars/Olympus\"}"}) {
-            mvc.perform(put(URL).with(user("alice")).contentType(MediaType.APPLICATION_JSON).content(body))
-                    .andExpect(status().isBadRequest());
-        }
+    void rejectsUnknownTimeZones() throws Exception {
+        mvc.perform(put(URL).with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"timeZone\": \"Mars/Olympus\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -13,7 +13,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -21,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.koshly.testsupport.KoshlyTest;
+
+import static com.koshly.testsupport.TestUsers.indian;
 
 /** Runs against the throwaway test database (see KoshlyTest). Each test is rolled back. */
 @KoshlyTest
@@ -45,27 +46,26 @@ class BankLinkControllerTest {
 
     @Test
     void eachCountryUsesItsOwnProvider() throws Exception {
-        mvc.perform(get("/api/bank-links/provider?country=US").with(user("alice")))
+        mvc.perform(get("/api/bank-links/provider").with(user("alice")))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.country").value("US"))
                 .andExpect(jsonPath("$.provider").value("plaid"))
                 .andExpect(jsonPath("$.name").value("Plaid"))
                 .andExpect(jsonPath("$.available").value(false));
-        mvc.perform(get("/api/bank-links/provider?country=IN").with(user("alice")))
+        mvc.perform(get("/api/bank-links/provider").with(indian("priya")))
+                .andExpect(jsonPath("$.country").value("IN"))
                 .andExpect(jsonPath("$.provider").value("account_aggregator"))
                 .andExpect(jsonPath("$.name").value("Account Aggregator"));
-        mvc.perform(get("/api/bank-links/provider?country=FR").with(user("alice")))
-                .andExpect(status().isBadRequest());
     }
 
     @Test
     void startingALinkSaysItIsNotAvailableYet() throws Exception {
-        mvc.perform(post("/api/bank-links").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"country\": \"IN\"}"))
+        mvc.perform(post("/api/bank-links").with(indian("priya")))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.detail").value(
                         "Bank linking with Account Aggregator isn't available yet. You can add accounts yourself for now."));
         // Nothing was saved.
-        mvc.perform(get("/api/bank-links?country=IN").with(user("alice")))
+        mvc.perform(get("/api/bank-links").with(indian("priya")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }

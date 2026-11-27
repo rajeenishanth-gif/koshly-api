@@ -18,10 +18,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
      */
     @Modifying
     @Query(value = """
-            INSERT INTO app_user (firebase_uid, email, data_region)
-            VALUES (:firebaseUid, :email, :dataRegion)
+            INSERT INTO app_user (firebase_uid, email, data_region, country, currency, time_zone)
+            VALUES (:firebaseUid, :email, :dataRegion, :country, :currency, :timeZone)
             ON CONFLICT (firebase_uid) DO NOTHING
             """, nativeQuery = true)
     void insertIfMissing(@Param("firebaseUid") String firebaseUid, @Param("email") String email,
-            @Param("dataRegion") String dataRegion);
+            @Param("dataRegion") String dataRegion, @Param("country") String country,
+            @Param("currency") String currency, @Param("timeZone") String timeZone);
 }

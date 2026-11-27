@@ -14,11 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.koshly.account.AccountResponse;
 import com.koshly.account.AccountService;
+import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
 
 /**
- * The dashboard's totals and alerts for one country. Builds on the same
+ * The dashboard's totals and alerts for the signed-in account's country. Builds on the same
  * account list the app shows (AccountService.list), so ownership, the
  * country filter and removed accounts are handled in one place.
  */
@@ -33,17 +34,18 @@ public class DashboardService {
 
     private final AccountService accounts;
     private final UserService users;
+    private final AccountCountry accountCountry;
 
-    public DashboardService(AccountService accounts, UserService users) {
+    public DashboardService(AccountService accounts, UserService users, AccountCountry accountCountry) {
         this.accounts = accounts;
         this.users = users;
+        this.accountCountry = accountCountry;
     }
 
     @Transactional(readOnly = true)
-    public DashboardResponse summary(Jwt jwt, String country) {
-        List<AccountResponse> all = accounts.list(jwt, country); // checks the country too
-        String chosen = country != null ? country : users.settingsFor(jwt).country();
-        Market market = Market.forCountry(chosen).orElseThrow();
+    public DashboardResponse summary(Jwt jwt) {
+        List<AccountResponse> all = accounts.list(jwt);
+        Market market = accountCountry.of(jwt);
         LocalDate today = users.today(jwt);
 
         BigDecimal cash = BigDecimal.ZERO;

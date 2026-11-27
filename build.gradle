@@ -30,6 +30,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	runtimeOnly 'org.postgresql:postgresql'
+
+	// Firebase Admin: signs a user in to another country's account (a Firebase tenant)
+	// after they confirm a code. Not managed by Spring Boot, so it needs a version.
+	implementation 'com.google.firebase:firebase-admin:9.12.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

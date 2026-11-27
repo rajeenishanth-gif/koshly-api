@@ -29,12 +29,12 @@ public class AppUser {
     @Column(name = "dashboard_sections", length = 300)
     private String dashboardSections;
 
-    /** ISO country code, e.g. "US" or "IN". */
-    @Column(name = "country", nullable = false, length = 2)
+    /** ISO country code, e.g. "US" or "IN": the account's country, from its sign-in. Never changes. */
+    @Column(name = "country", nullable = false, length = 2, updatable = false)
     private String country;
 
     /** Currency for the user's totals, e.g. "USD" or "INR". */
-    @Column(name = "currency", nullable = false, length = 3)
+    @Column(name = "currency", nullable = false, length = 3, updatable = false)
     private String currency;
 
     /** IANA time zone, e.g. "America/Chicago" or "Asia/Kolkata". */
@@ -87,14 +87,6 @@ public class AppUser {
 
     public String getDataRegion() {
         return dataRegion;
-    }
-
-    void setCountry(String country) {
-        this.country = country;
-    }
-
-    void setCurrency(String currency) {
-        this.currency = currency;
     }
 
     void setTimeZone(String timeZone) {

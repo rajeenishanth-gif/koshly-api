@@ -18,12 +18,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
 import com.koshly.testsupport.KoshlyTest;
+
+import static com.koshly.testsupport.TestUsers.indian;
+import static com.koshly.testsupport.TestUsers.tenant;
+import static com.koshly.testsupport.TestUsers.user;
 
 /**
  * Runs against the throwaway test database that @KoshlyTest starts (Testcontainers).
@@ -80,13 +83,6 @@ class AccountControllerTest {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     }
 
-    /** A signed-in user with a verified email. */
-    private static RequestPostProcessor user(String uid) {
-        return jwt().jwt(token -> token
-                .subject(uid)
-                .claim("email", uid + "@example.com")
-                .claim("email_verified", true));
-    }
 
     /** Adds an account as {@code uid} and returns its id. */
     private String add(String uid, String json) throws Exception {
@@ -170,29 +166,36 @@ class AccountControllerTest {
     }
 
     @Test
-    void eachCountrysAccountsAreKeptApart() throws Exception {
-        // A US checking account (the default country) ...
-        String us = add("alice", CHECKING);
-        mvc.perform(get("/api/accounts/" + us).with(user("alice")))
-                .andExpect(jsonPath("$.country").value("US"))
-                .andExpect(jsonPath("$.currency").value("USD"));
-
-        // ... and an Indian one, in rupees, with a balance in the crores.
-        mvc.perform(post("/api/accounts").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
-                        .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 25000000.00, \"country\": \"IN\"")))
+    void anIndianAccountIsInIndiaAndInRupees() throws Exception {
+        // Signed in through the India tenant: everything is Indian, in rupees, with no country in the request.
+        mvc.perform(post("/api/accounts").with(indian("priya")).contentType(MediaType.APPLICATION_JSON)
+                        .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 25000000.00")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.country").value("IN"))
                 .andExpect(jsonPath("$.currency").value("INR"));
-
-        // The list shows one country at a time: the user's current one (US) unless asked.
-        mvc.perform(get("/api/accounts").with(user("alice")))
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].country").value("US"));
-        mvc.perform(get("/api/accounts?country=IN").with(user("alice")))
+        mvc.perform(get("/api/accounts").with(indian("priya")))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].currency").value("INR"));
 
-        // Countries Koshly doesn't support yet are refused.
+        // A US account sees only its own (US) data.
+        add("alice", CHECKING);
+        mvc.perform(get("/api/accounts").with(user("alice")))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].country").value("US"));
+    }
+
+    @Test
+    void anAccountCanOnlyAddToItsOwnCountry() throws Exception {
+        // A US account can't add an Indian account by asking for one.
+        mvc.perform(post("/api/accounts").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+                        .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 10, \"country\": \"IN\"")))
+                .andExpect(status().isBadRequest());
+        // Nor can an existing account be moved.
+        String id = add("alice", CHECKING);
+        mvc.perform(put("/api/accounts/" + id).with(user("alice")).contentType(MediaType.APPLICATION_JSON)
+                        .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 10, \"country\": \"IN\"")))
+                .andExpect(status().isBadRequest());
+        // Countries Koshly doesn't support are refused outright.
         mvc.perform(post("/api/accounts").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
                         .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 10, \"country\": \"FR\"")))
                 .andExpect(status().isBadRequest())
@@ -200,26 +203,9 @@ class AccountControllerTest {
     }
 
     @Test
-    void anAccountCantMoveToAnotherCountry() throws Exception {
-        String id = add("alice", CHECKING);
-        mvc.perform(put("/api/accounts/" + id).with(user("alice")).contentType(MediaType.APPLICATION_JSON)
-                        .content(CHECKING.replace("\"balance\": 4825.17", "\"balance\": 10, \"country\": \"IN\"")))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void switchingToIndiaShowsAndAddsIndianAccounts() throws Exception {
-        add("priya", CHECKING); // added while in the US
-        mvc.perform(put("/api/users/current/preferences").with(user("priya")).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"country\": \"IN\"}"))
-                .andExpect(status().isOk());
-
-        mvc.perform(get("/api/accounts").with(user("priya")))
-                .andExpect(jsonPath("$.length()").value(0)); // the US account isn't shown in India
-        String id = add("priya", CHECKING);
-        mvc.perform(get("/api/accounts/" + id).with(user("priya")))
-                .andExpect(jsonPath("$.country").value("IN"))
-                .andExpect(jsonPath("$.currency").value("INR"));
+    void aSignInFromAnUnknownTenantIsRefused() throws Exception {
+        mvc.perform(get("/api/accounts").with(tenant("mallory", "some-other-tenant")))
+                .andExpect(status().isForbidden());
     }
 
     @Test

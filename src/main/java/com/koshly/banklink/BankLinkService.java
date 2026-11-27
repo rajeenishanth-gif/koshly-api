@@ -12,11 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.koshly.account.Account;
+import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
 
 /**
- * Bank connections. Picks the provider from the country (the one shown in the
+ * Bank connections. Picks the provider from the account's country (from its sign-in,
  * app), so the same calls work for Plaid in the US and Account Aggregator in India.
  */
 @Service
@@ -27,23 +28,27 @@ public class BankLinkService {
     private final UserService users;
     private final Clock clock = Clock.systemUTC();
 
-    public BankLinkService(BankLinkRepository links, BankDataProviders providers, UserService users) {
+    private final AccountCountry accountCountry;
+
+    public BankLinkService(BankLinkRepository links, BankDataProviders providers, UserService users,
+            AccountCountry accountCountry) {
+        this.accountCountry = accountCountry;
         this.links = links;
         this.providers = providers;
         this.users = users;
     }
 
-    /** Which provider a country uses and whether it's ready. */
-    public ProviderInfo providerFor(String country) {
-        Market market = market(country);
+    /** Which provider the account's country uses and whether it's ready. */
+    public ProviderInfo providerFor(Jwt jwt) {
+        Market market = accountCountry.of(jwt);
         BankDataProvider provider = providers.forCountry(market);
         return new ProviderInfo(market.country(), provider.id(), provider.displayName(), provider.isAvailable());
     }
 
-    /** Starts linking a bank in the given country. 503 while that country's provider isn't ready. */
+    /** Starts linking a bank in the account's country. 503 while that country's provider isn't ready. */
     @Transactional
-    public BankDataProvider.LinkStart start(Jwt jwt, String country) {
-        Market market = market(country);
+    public BankDataProvider.LinkStart start(Jwt jwt) {
+        Market market = accountCountry.of(jwt);
         BankDataProvider provider = providers.forCountry(market);
         if (!provider.isAvailable()) {
             throw notAvailable(provider.displayName());
@@ -54,8 +59,8 @@ public class BankLinkService {
     }
 
     @Transactional(readOnly = true)
-    public List<BankLinkResponse> list(Jwt jwt, String country) {
-        return links.findAllForUser(jwt.getSubject(), market(country).country()).stream()
+    public List<BankLinkResponse> list(Jwt jwt) {
+        return links.findAllForUser(jwt.getSubject(), accountCountry.of(jwt).country()).stream()
                 .map(BankLinkResponse::from)
                 .toList();
     }
@@ -84,11 +89,6 @@ public class BankLinkService {
     private void revoke(BankLink link) {
         providers.forLink(link).disconnect(link);
         link.markRevoked(Instant.now(clock));
-    }
-
-    private static Market market(String country) {
-        return Market.forCountry(country).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Koshly isn't available in that country yet."));
     }
 
     static ResponseStatusException notAvailable(String providerName) {
