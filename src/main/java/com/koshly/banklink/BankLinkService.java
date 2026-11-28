@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.koshly.access.AccessService;
 import com.koshly.account.Account;
 import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
@@ -29,10 +30,12 @@ public class BankLinkService {
     private final Clock clock = Clock.systemUTC();
 
     private final AccountCountry accountCountry;
+    private final AccessService access;
 
     public BankLinkService(BankLinkRepository links, BankDataProviders providers, UserService users,
-            AccountCountry accountCountry) {
+            AccountCountry accountCountry, AccessService access) {
         this.accountCountry = accountCountry;
+        this.access = access;
         this.links = links;
         this.providers = providers;
         this.users = users;
@@ -53,6 +56,7 @@ public class BankLinkService {
         if (!provider.isAvailable()) {
             throw notAvailable(provider.displayName());
         }
+        access.requirePaidPlan(jwt.getSubject()); // 402: bank linking is for paid plans
         users.ensureUserExists(jwt);
         BankLink link = links.save(new BankLink(jwt.getSubject(), market.country(), provider.id()));
         return provider.start(link);

@@ -4,6 +4,7 @@ import static com.koshly.testsupport.TestUsers.user;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -22,6 +24,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.koshly.accountlink.CountryLink;
+import com.koshly.accountlink.CountryLinkRepository;
 import com.koshly.testsupport.TestUsers;
 import com.koshly.testsupport.TestcontainersConfiguration;
 import com.koshly.user.AppUserRepository;
@@ -53,6 +57,14 @@ class AccessTest {
 
     @Autowired
     private AppUserRepository users;
+
+    @Autowired
+    private CountryLinkRepository links;
+
+    private static final String CARD = """
+            {"type":"credit","subtype":"credit_card","name":"Card","institution":"Bank","last4":"1234",
+             "balance":100,"creditCard":{"creditLimit":1000,"statementBalance":50,"minimumDue":25,"dueDay":15,"apr":20,"color":"#1E3A8A"}}
+            """;
 
     private MockMvc mvc;
 
@@ -87,15 +99,50 @@ class AccessTest {
         mvc.perform(get("/api/users/current").with(user("alice"))).andExpect(status().isOk());
     }
 
+    private org.springframework.test.web.servlet.ResultActions addCard(RequestPostProcessor who) throws Exception {
+        return mvc.perform(post("/api/accounts").with(who).contentType(MediaType.APPLICATION_JSON).content(CARD));
+    }
+
     @Test
-    void withAPhoneButNoPlanYouSeeTheSubscriptionPage() throws Exception {
-        mvc.perform(get("/api/dashboard").with(withPhone("bob")))
+    void withoutAPlanYouGetTheFreeTier() throws Exception {
+        // The dashboard works...
+        mvc.perform(get("/api/dashboard").with(withPhone("bob"))).andExpect(status().isOk());
+        mvc.perform(get("/api/access").with(withPhone("bob")))
+                .andExpect(jsonPath("$.blocked").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.freeTier").value(true))
+                .andExpect(jsonPath("$.freeLimits.creditCards").value(2))
+                .andExpect(jsonPath("$.countriesAllowed").value(1));
+        // ...with two cards, not three.
+        addCard(withPhone("bob")).andExpect(status().isCreated());
+        addCard(withPhone("bob")).andExpect(status().isCreated());
+        addCard(withPhone("bob"))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("FREE_LIMIT"));
+        // Bank linking is for paid plans (503 while the provider isn't ready, which is checked first).
+        mvc.perform(post("/api/bank-links").with(withPhone("bob")))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
+                        .isIn(402, 503));
+    }
+
+    @Test
+    void aPlanLiftsTheLimits() throws Exception {
+        subscribe("frank", "active", Instant.now().plus(30, ChronoUnit.DAYS));
+        for (int i = 0; i < 3; i++) {
+            addCard(withPhone("frank")).andExpect(status().isCreated());
+        }
+    }
+
+    @Test
+    void anAddedCountryNeedsAPlanBehindIt() throws Exception {
+        users.insertIfMissing("gina", "gina@example.com", "us", "US", "USD", "America/Chicago");
+        links.saveAndFlush(new CountryLink("gina-ca", "CA", "gina"));
+        RequestPostProcessor ginaInCanada = TestUsers.tenant("gina-ca", TestUsers.CANADA_TENANT);
+        mvc.perform(get("/api/dashboard").with(ginaInCanada))
                 .andExpect(status().isPaymentRequired())
                 .andExpect(jsonPath("$.code").value("SUBSCRIPTION_REQUIRED"));
-        mvc.perform(get("/api/access").with(withPhone("bob")))
-                .andExpect(jsonPath("$.blocked").value("SUBSCRIPTION_REQUIRED"))
-                .andExpect(jsonPath("$.subscribed").value(false))
-                .andExpect(jsonPath("$.canAddCountries").value(true));
+        mvc.perform(get("/api/access").with(ginaInCanada))
+                .andExpect(jsonPath("$.home").value(false))
+                .andExpect(jsonPath("$.homeCountry").value("US"));
     }
 
     @Test
@@ -109,10 +156,12 @@ class AccessTest {
     }
 
     @Test
-    void anExpiredPlanDoesNot() throws Exception {
+    void anExpiredPlanFallsBackToTheFreeTier() throws Exception {
         subscribe("dave", "active", Instant.now().minus(1, ChronoUnit.DAYS));
-        mvc.perform(get("/api/dashboard").with(withPhone("dave"))).andExpect(status().isPaymentRequired());
+        mvc.perform(get("/api/access").with(withPhone("dave")))
+                .andExpect(jsonPath("$.freeTier").value(true))
+                .andExpect(jsonPath("$.subscriptionEnded").value(true));
         subscribe("erin", "expired", null);
-        mvc.perform(get("/api/dashboard").with(withPhone("erin"))).andExpect(status().isPaymentRequired());
+        mvc.perform(get("/api/access").with(withPhone("erin"))).andExpect(jsonPath("$.freeTier").value(true));
     }
 }

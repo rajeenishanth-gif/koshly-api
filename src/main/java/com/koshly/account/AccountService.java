@@ -13,8 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.koshly.config.KoshlyProperties;
+import com.koshly.access.AccessService;
 import com.koshly.banklink.BankLinkService;
+import com.koshly.config.KoshlyProperties;
 import com.koshly.region.AccountCountry;
 import com.koshly.region.Market;
 import com.koshly.user.UserService;
@@ -34,10 +35,12 @@ public class AccountService {
     private final BankLinkService bankLinks;
     private final AccountCountry accountCountry;
     private final Duration keepRemovedFor;
+    private final AccessService access;
     private final Clock clock = Clock.systemUTC();
 
     public AccountService(AccountRepository accounts, UserService users, BankLinkService bankLinks,
-            AccountCountry accountCountry, KoshlyProperties properties) {
+            AccountCountry accountCountry, KoshlyProperties properties, AccessService access) {
+        this.access = access;
         this.accounts = accounts;
         this.users = users;
         this.bankLinks = bankLinks;
@@ -152,7 +155,9 @@ public class AccountService {
     }
 
     private void checkRoomFor(Jwt jwt, String type) {
-        if (accounts.countByUserIdAndTypeAndRemovedAtIsNull(jwt.getSubject(), type) >= MAX_PER_TYPE) {
+        long count = accounts.countByUserIdAndTypeAndRemovedAtIsNull(jwt.getSubject(), type);
+        access.checkFreeTierRoom(jwt.getSubject(), type, count); // 402 on the free tier's limits
+        if (count >= MAX_PER_TYPE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "You can add up to " + MAX_PER_TYPE + " of each kind of account.");
         }
