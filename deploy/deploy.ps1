@@ -1,5 +1,11 @@
 # Builds the API's container image, pushes it to Artifact Registry and deploys
-# it to Cloud Run. Run it again for every new version.
+# it to Cloud Run, applying the full list of settings below.
+#
+# CAUTION: --set-env-vars REPLACES all of the service's settings with this list, so
+# anything changed in the Cloud Run console (CORS for the website, FIREBASE_TENANT_*...)
+# is lost. For a normal new version use the Gradle tasks instead, which change only the
+# image: .\gradlew.bat release  (see gradle/cloud.gradle). Use this script to set up a
+# new environment, after updating the list.
 #
 # Run from the koshly-api folder, in PowerShell, with Docker Desktop running:
 #   powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1

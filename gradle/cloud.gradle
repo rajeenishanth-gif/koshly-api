@@ -1,0 +1,131 @@
+// Build the API's container image, push it to Artifact Registry and deploy it to Cloud Run.
+//
+//   .\gradlew.bat dockerBuild      build the image on this machine (Docker Desktop running)
+//   .\gradlew.bat dockerPush       upload it to Artifact Registry
+//   .\gradlew.bat cloudRunDeploy   point Cloud Run at it and check /actuator/health
+//   .\gradlew.bat release          all of the above, after the tests pass
+//
+// The image is tagged with the git commit (plus "-dirty" when there are uncommitted
+// changes), so every version in Artifact Registry maps back to its code.
+//
+// Deploying changes only the image: the service's settings and secrets set in Cloud Run
+// (CORS, tenants, DB password...) stay as they are. deploy/deploy.ps1 is different: it
+// re-applies its own list of settings, replacing what's in Cloud Run.
+//
+// Every value can be overridden with -P (or ORG_GRADLE_PROJECT_<name> in a CI pipeline):
+//   -PgcpProject=koshly-prod  -PgcpRegion  -PgcpRepo  -PgcpService  -PimageTag=v1.2.0
+//   -PcloudSdkBin=<folder with gcloud>   when gcloud isn't on PATH
+// In CI (GitHub Actions), the tag defaults to the commit being built (GITHUB_SHA), and
+// gcloud/docker are signed in by the pipeline (Workload Identity) instead of your login.
+
+def prop = { String name, String fallback -> (findProperty(name) ?: fallback).toString() }
+def gcpProject = prop('gcpProject', 'koshly-dev')
+def gcpRegion = prop('gcpRegion', 'us-central1')
+def gcpRepo = prop('gcpRepo', 'koshly')
+def gcpService = prop('gcpService', 'koshly-api')
+
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+
+// Where gcloud lives. Docker also needs this folder on PATH to find docker-credential-gcloud,
+// the helper that signs pushes to Artifact Registry with your gcloud login.
+def sdkBin = {
+    def given = findProperty('cloudSdkBin')
+    if (given) return given.toString()
+    def local = System.getenv('LOCALAPPDATA')
+    def guess = local ? new File(local, 'Google/Cloud SDK/google-cloud-sdk/bin') : null
+    return guess?.isDirectory() ? guess.absolutePath : null
+}()
+def gcloud = sdkBin ? new File(sdkBin, isWindows ? 'gcloud.cmd' : 'gcloud').absolutePath : (isWindows ? 'gcloud.cmd' : 'gcloud')
+def toolPath = sdkBin ? "${sdkBin}${File.pathSeparator}${System.getenv('PATH')}" : System.getenv('PATH')
+
+// Runs git and returns its output, or null when it fails (no git, not a repository).
+// (providers.exec: Gradle 9's way to run a command while configuring.)
+def git = { List<String> args ->
+    try {
+        def run = providers.exec {
+            commandLine(['git'] + args)
+            ignoreExitValue = true
+        }
+        return run.result.get().exitValue == 0 ? run.standardOutput.asText.get().trim() : null
+    } catch (ignored) {
+        return null
+    }
+}
+
+// Worked out once, when a deployment task runs.
+def imageTag = {
+    def given = findProperty('imageTag') ?: System.getenv('GITHUB_SHA')?.take(7)
+    if (given) return given.toString()
+    def sha = git(['rev-parse', '--short', 'HEAD']) ?: new Date().format('yyyyMMdd-HHmmss')
+    return git(['status', '--porcelain']) ? "${sha}-dirty" : sha
+}.memoize()
+def image = { "${gcpRegion}-docker.pkg.dev/${gcpProject}/${gcpRepo}/${gcpService}:${imageTag()}" }
+
+tasks.register('dockerBuild', Exec) {
+    group = 'deployment'
+    description = 'Builds the API container image (Docker must be running).'
+    workingDir = projectDir
+    environment 'PATH', toolPath
+    doFirst {
+        commandLine 'docker', 'build', '-t', image(), '.'
+        logger.lifecycle("==> Building ${image()}")
+    }
+}
+
+tasks.register('dockerPush', Exec) {
+    group = 'deployment'
+    description = 'Uploads the image to Artifact Registry.'
+    mustRunAfter 'dockerBuild'
+    environment 'PATH', toolPath
+    doFirst {
+        commandLine 'docker', 'push', image()
+        logger.lifecycle("==> Pushing ${image()}")
+    }
+}
+
+tasks.register('cloudRunDeploy', Exec) {
+    group = 'deployment'
+    description = 'Deploys the pushed image to Cloud Run (settings and secrets stay as they are).'
+    mustRunAfter 'dockerPush'
+    environment 'PATH', toolPath
+    doFirst {
+        commandLine gcloud, 'run', 'deploy', gcpService,
+                "--image=${image()}", "--region=${gcpRegion}", "--project=${gcpProject}", '--quiet'
+        logger.lifecycle("==> Deploying ${image()} to Cloud Run service ${gcpService} (${gcpRegion})")
+    }
+    doLast {
+        // Find the service URL and wait for the health check, so a broken start shows here.
+        def url = providers.exec {
+            environment 'PATH', toolPath
+            commandLine gcloud, 'run', 'services', 'describe', gcpService,
+                    "--region=${gcpRegion}", "--project=${gcpProject}", '--format=value(status.url)'
+        }.standardOutput.asText.get().trim()
+        logger.lifecycle("Deployed: ${url}")
+        def healthy = false
+        for (int attempt = 1; attempt <= 6 && !healthy; attempt++) {
+            try {
+                def conn = URI.create("${url}/actuator/health").toURL().openConnection()
+                conn.connectTimeout = 10000
+                conn.readTimeout = 60000 // the first request may wait for a cold start
+                def body = conn.inputStream.text
+                healthy = body.contains('"UP"')
+                logger.lifecycle("Health:   ${body}")
+            } catch (e) {
+                logger.lifecycle("Health check ${attempt}/6 didn't answer yet (${e.message}); retrying...")
+                sleep(5000)
+            }
+        }
+        if (!healthy) {
+            throw new GradleException("The new revision didn't report UP. Check the logs: Cloud Run > ${gcpService} > Logs, " +
+                    "or roll back: Revisions > previous revision > Manage traffic.")
+        }
+    }
+}
+
+tasks.register('release') {
+    group = 'deployment'
+    description = 'Tests, builds the image, pushes it and deploys it to Cloud Run, in that order.'
+    dependsOn 'test', 'dockerBuild', 'dockerPush', 'cloudRunDeploy'
+}
+// The image is built only after the tests pass.
+tasks.named('dockerBuild') { mustRunAfter 'test' }

@@ -49,3 +49,6 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Docker image and Cloud Run deployment tasks: dockerBuild, dockerPush, cloudRunDeploy, release.
+apply from: 'gradle/cloud.gradle'
