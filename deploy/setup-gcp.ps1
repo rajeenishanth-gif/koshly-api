@@ -65,11 +65,15 @@ if (-not (Test-Exists { gcloud sql databases describe $DbName --instance $DbInst
 
 # 5. The database user, with a random password stored only in Secret Manager.
 if (-not (Test-Exists { gcloud secrets describe $DbSecret })) {
-    # 32 random letters and digits; never printed or saved to disk except a temp file deleted at once.
+    # 32 random letters and digits (plus a fixed tail, below); never printed or saved to disk except a temp file deleted at once.
     $chars = [char[]]"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $password = -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
+    # Cloud SQL's password policy (on with the console presets) wants a lowercase letter, an
+    # uppercase letter, a digit and a symbol. Add one of each; "-" and "_" are the symbols that
+    # pass safely through gcloud.cmd and Command Prompt (& ^ % ! | < > would be mangled).
+    $password = "$password-Kx7_"
 
     Invoke-Step "Create database user '$DbUser'" {
         gcloud sql users create $DbUser --instance=$DbInstance --password=$password
