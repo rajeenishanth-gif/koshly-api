@@ -22,6 +22,10 @@ import org.springframework.test.context.TestPropertySource;
 // India tenant, so they can sign in as an Indian account (see TestUsers.indian).
 @TestPropertySource(properties = {
         "koshly.accounts.tenants.IN=" + TestUsers.INDIA_TENANT,
-        "koshly.accounts.enabled-countries=US,IN"})
+        "koshly.accounts.enabled-countries=US,IN",
+        // The whole suite shares one app and reuses user IDs like "alice", so keep the
+        // per-person rate limit out of the way; RateLimitTest checks it with low limits.
+        "koshly.rate-limit.reads-per-minute=1000000",
+        "koshly.rate-limit.writes-per-minute=1000000"})
 public @interface KoshlyTest {
 }
