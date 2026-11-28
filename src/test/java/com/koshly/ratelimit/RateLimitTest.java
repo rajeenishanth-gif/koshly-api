@@ -34,6 +34,8 @@ import com.koshly.testsupport.TestcontainersConfiguration;
 @TestPropertySource(properties = {
         "koshly.accounts.tenants.IN=" + TestUsers.INDIA_TENANT,
         "koshly.accounts.enabled-countries=US,IN",
+        // Tests use the deploy setting above, never a real Firestore document.
+        "koshly.app-config.firestore=false",
         "koshly.rate-limit.reads-per-minute=3",
         "koshly.rate-limit.writes-per-minute=2"})
 @Transactional

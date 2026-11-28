@@ -1,8 +1,10 @@
 package com.koshly.accountlink;
 
+import static com.koshly.testsupport.TestUsers.canadian;
 import static com.koshly.testsupport.TestUsers.indian;
 import static com.koshly.testsupport.TestUsers.user;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -17,6 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Optional;
+
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,7 +61,12 @@ class AccountLinkControllerTest {
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
-        when(tenants.signInTokenFor(anyString(), any(), anyString())).thenReturn("custom-token-for-india");
+        when(tenants.signInTokenFor(anyString(), any(), anyString()))
+                .thenReturn(new TenantAccounts.TenantSignIn("alice-india", "custom-token-for-india"));
+        // any(): the US has no tenant (null), like in production until tenants are set up.
+        when(tenants.create(any(), any(), anyBoolean())).thenReturn("new-user-there");
+        when(tenants.signInToken(any(), anyString()))
+                .thenAnswer(call -> "token-for-" + call.getArgument(1, String.class));
     }
 
     /** Asks for a code and returns {verificationId, code}. */
@@ -151,6 +160,57 @@ class AccountLinkControllerTest {
         mvc.perform(post("/api/account-links/codes").with(user("alice")).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"country\":\"IN\",\"channel\":\"email\",\"destination\":\"alice@example.com\"}"))
                 .andExpect(status().isTooManyRequests());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions add(RequestPostProcessor who, String country)
+            throws Exception {
+        return mvc.perform(post("/api/account-links").with(who).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"country\":\"" + country + "\"}"));
+    }
+
+    @Test
+    void addingANewCountryNeedsNoCode() throws Exception {
+        add(user("alice"), "CA")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.country").value("CA"))
+                .andExpect(jsonPath("$.needsCode").value(false))
+                .andExpect(jsonPath("$.signInToken").value("token-for-new-user-there"));
+        verify(tenants).create(TestUsers.CANADA_TENANT, "alice@example.com", true);
+        verify(sender, never()).send(any(), anyString(), anyString());
+
+        // Adding it again (say, on a new phone) opens the same account, still without a code.
+        add(user("alice"), "CA").andExpect(status().isOk())
+                .andExpect(jsonPath("$.signInToken").value("token-for-new-user-there"));
+        verify(tenants, org.mockito.Mockito.times(1)).create(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void anAccountAlreadyThereWithYourEmailNeedsACode() throws Exception {
+        when(tenants.findByEmail(TestUsers.INDIA_TENANT, "alice@example.com")).thenReturn(Optional.of("old-account"));
+        add(user("alice"), "IN")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.needsCode").value(true))
+                .andExpect(jsonPath("$.codeSentTo").value("a•••@example.com"));
+        verify(tenants, never()).create(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void onlyUsAndCanadianHomesCanAddCountries() throws Exception {
+        // Registered in India: home country only.
+        add(indian("priya"), "US").andExpect(status().isForbidden());
+        mvc.perform(post("/api/account-links/codes").with(indian("priya")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"country\":\"US\",\"channel\":\"email\",\"destination\":\"priya@example.com\"}"))
+                .andExpect(status().isForbidden());
+        // Registered in Canada: may add, including the US (the default country, no tenant).
+        add(canadian("chloe"), "US").andExpect(status().isOk());
+        verify(tenants).create(null, "chloe@example.com", true);
+    }
+
+    @Test
+    void anAddedAccountCantAddMoreCountries() throws Exception {
+        add(user("alice"), "CA").andExpect(status().isOk()); // creates "new-user-there" in Canada
+        // Signed in to that Canadian account, which was added from the US one.
+        add(TestUsers.tenant("new-user-there", TestUsers.CANADA_TENANT), "IN").andExpect(status().isForbidden());
     }
 
     @Test

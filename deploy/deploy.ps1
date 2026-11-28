@@ -24,7 +24,7 @@ $settings = @(
     "KOSHLY_ENVIRONMENT=staging",
     "KOSHLY_CODE_SENDER=disabled",        # until Twilio is set up (then: twilio + TWILIO_* settings)
     "FIREBASE_PROJECT_ID=$ProjectId",
-    "KOSHLY_ENABLED_COUNTRIES=US",
+    "KOSHLY_ENABLED_COUNTRIES=US",         # default only; admins switch countries in Firestore config/app
     "CORS_ALLOWED_ORIGINS=http://localhost:8081",
     "DB_URL=jdbc:postgresql:///$DbName`?cloudSqlInstance=$SqlConnection&socketFactory=com.google.cloud.sql.postgres.SocketFactory",
     "DB_USER=$DbUser"

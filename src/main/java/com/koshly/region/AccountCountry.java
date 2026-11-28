@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.koshly.config.AppSwitches;
 import com.koshly.config.KoshlyProperties;
 
 /**
@@ -25,17 +26,16 @@ public class AccountCountry {
 
     private final Map<String, String> tenantsByCountry;
     private final String defaultCountry;
-    private final List<String> enabled;
+    private final AppSwitches switches;
 
-    AccountCountry(KoshlyProperties properties) {
+    AccountCountry(KoshlyProperties properties, AppSwitches switches) {
+        this.switches = switches;
         var accounts = properties.accounts();
         this.tenantsByCountry = accounts.tenants() == null ? Map.of() : accounts.tenants();
         this.defaultCountry = accounts.defaultCountry() == null || accounts.defaultCountry().isBlank()
                 ? null
                 : accounts.defaultCountry();
-        this.enabled = accounts.enabledCountries() == null || accounts.enabledCountries().isEmpty()
-                ? List.of("US")
-                : accounts.enabledCountries();
+        List<String> enabled = accounts.enabledCountries() == null ? List.of() : accounts.enabledCountries();
         // Catch typos at startup rather than at the first sign-in.
         enabled.forEach(c -> Market.forCountry(c)
                 .orElseThrow(() -> new IllegalStateException("koshly.accounts.enabled-countries: unknown country " + c)));
@@ -47,9 +47,13 @@ public class AccountCountry {
         }
     }
 
-    /** True when users can use this country now (see koshly.accounts.enabled-countries). */
+    /**
+     * True when users can use this country now: switched on by an admin in Firestore
+     * (config/app.enabledCountries, see AppSwitches), or by koshly.accounts.enabled-countries
+     * when that isn't set.
+     */
     public boolean isEnabled(Market market) {
-        return enabled.contains(market.country());
+        return switches.enabledCountries().contains(market.country());
     }
 
     /**
@@ -77,6 +81,14 @@ public class AccountCountry {
                 .findFirst()
                 .flatMap(e -> Market.forCountry(e.getKey()))
                 .orElseThrow(AccountCountry::forbidden);
+    }
+
+    /**
+     * True when people can sign in to this country: it has its own tenant, or it's the
+     * default country (sign-ins without a tenant, the US until tenants are set up).
+     */
+    public boolean canSignIn(Market market) {
+        return tenantFor(market).isPresent() || (defaultCountry != null && defaultCountry.equals(market.country()));
     }
 
     /** The Firebase tenant ID for a country, or empty if it has none yet. */

@@ -36,6 +36,7 @@ public class PayoffService {
     /** The smallest minimum payment cards usually ask for, per country (to estimate future minimums). */
     private static final Map<Market, BigDecimal> MINIMUM_FLOOR = Map.of(
             Market.US, new BigDecimal("25"),
+            Market.CA, new BigDecimal("10"),
             Market.IN, new BigDecimal("200"));
 
     /**

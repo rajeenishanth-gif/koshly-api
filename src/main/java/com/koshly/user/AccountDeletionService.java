@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.koshly.accountlink.CountryLinkRepository;
 import com.koshly.banklink.BankLinkService;
 import com.koshly.config.SessionCheck;
 import com.koshly.region.AccountCountry;
@@ -30,9 +31,11 @@ public class AccountDeletionService {
     private final BankLinkService bankLinks;
     private final UserIdentities identities;
     private final SessionCheck sessions;
+    private final CountryLinkRepository countryLinks;
 
     public AccountDeletionService(AppUserRepository users, BankLinkService bankLinks, UserIdentities identities,
-            SessionCheck sessions) {
+            SessionCheck sessions, CountryLinkRepository countryLinks) {
+        this.countryLinks = countryLinks;
         this.users = users;
         this.bankLinks = bankLinks;
         this.identities = identities;
@@ -46,6 +49,9 @@ public class AccountDeletionService {
         sessions.requireActive(jwt);
 
         bankLinks.disconnectAll(jwt);
+        // An added country's link to its home (a home account's own links go with it by cascade;
+        // its added accounts stay, each with its own data, and can be deleted from inside them).
+        countryLinks.deleteByLinkedUserId(jwt.getSubject());
         users.deleteByFirebaseUid(jwt.getSubject());
         identities.delete(jwt.getSubject(), AccountCountry.tenantOf(jwt).orElse(null));
     }

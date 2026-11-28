@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * /api/account-links: "Add a country" from the account menu.
  *
+ *   POST /api/account-links  {"country":"CA"}
+ *        -> 200 {country, needsCode:false, signInToken}   (opened or created, no code needed)
+ *        -> 200 {country, needsCode:true, codeSentTo}     (an account with this email exists there:
+ *                                                          ask for a code below, by email)
  *   POST /api/account-links/codes  {"country":"IN","channel":"email"|"sms","destination":"..."}
  *        -> 202 {verificationId, channel, sentTo, expiresAt}   (a 6-digit code is sent)
  *   POST /api/account-links/codes/{id}/verify  {"code":"123456"}
@@ -35,6 +39,11 @@ public class AccountLinkController {
         this.service = service;
     }
 
+    @PostMapping
+    public AccountLinkService.AddResult add(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AddRequest request) {
+        return service.add(jwt, request.country());
+    }
+
     @PostMapping("/codes")
     public ResponseEntity<OneTimeCodes.CodeSent> sendCode(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody SendCodeRequest request) {
@@ -46,6 +55,10 @@ public class AccountLinkController {
     public AccountLinkService.LinkedAccount verify(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody VerifyRequest request) {
         return service.verify(jwt, id, request.code());
+    }
+
+    public record AddRequest(
+            @NotNull @Pattern(regexp = "^[A-Z]{2}$", message = "Choose a country.") String country) {
     }
 
     public record SendCodeRequest(

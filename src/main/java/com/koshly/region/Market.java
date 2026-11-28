@@ -17,6 +17,9 @@ import java.util.stream.Collectors;
 public enum Market {
 
     US("US", "USD", "us", "America/New_York", "plaid", "+1"),
+    // Canada shares +1 with the US; MobileNumbers tells them apart by area code.
+    // Its data stays in "us" until Canada gets its own deployment (northamerica-northeast1).
+    CA("CA", "CAD", "us", "America/Toronto", "plaid", "+1"),
     IN("IN", "INR", "in", "Asia/Kolkata", "account_aggregator", "+91");
 
     private final String country;
@@ -62,6 +65,14 @@ public enum Market {
     /** International dialing code for its mobile numbers, e.g. "+91". */
     public String dialCode() {
         return dialCode;
+    }
+
+    /**
+     * True for countries whose accounts may add other countries (a multi-country plan):
+     * the US and Canada. Accounts registered anywhere else use their home country only.
+     */
+    public boolean canAddCountries() {
+        return this == US || this == CA;
     }
 
     public static Optional<Market> forCountry(String country) {
